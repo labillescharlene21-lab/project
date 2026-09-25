@@ -1,0 +1,32 @@
+# Secrets
+.env
+*.pem
+*.key
+
+# Data (keep folder structure only)
+data/**
+!data/**/
+!data/**/.gitkeep
+
+# Generated outputs
+outputs/**
+!outputs/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Airflow
+logs/
+airflow.db
+airflow-webserver.pid
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

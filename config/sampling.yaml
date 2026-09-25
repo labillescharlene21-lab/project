@@ -1,0 +1,62 @@
+# Stratified site sampling configuration.
+# Owner: n/a. Change values here only; no code edits needed.
+# Every run records these values in the batch manifest so results are reproducible.
+
+random_seed: 42
+
+period:
+  start_year: 2015
+  end_year: 2025
+
+# Primary indicator per realm. Eligibility counts ONLY samples of this indicator.
+# Thresholds: EPA 2012 Recreational Water Quality Criteria, single-sample values (CFU/100 mL).
+realms:
+  freshwater:
+    primary_indicator: e_coli
+    threshold_cfu_100ml: 410
+  marine:
+    primary_indicator: enterococci
+    threshold_cfu_100ml: 130
+
+# Supplementary indicators: ingested and reported, never used for eligibility or scoring.
+supplementary_indicators: [fecal_coliform, total_coliform]
+
+# Site eligibility (applied before sampling)
+eligibility:
+  min_samples: 24          # samples of the realm's primary indicator within the period
+  min_distinct_years: 3    # distinct calendar years with at least one sample
+  require_coordinates: true
+
+# Sampling
+sampling:
+  k_per_stratum_realm: 60        # max sites per (stratum, realm); confirm from Day 2 profiling
+  take_all_if_fewer: true        # if eligible < k, take all and log a warning
+  min_sites_to_keep: 10          # below this, keep the stratum but flag it as low-coverage in reports
+  wqp_candidate_oversample: 3    # WQP only: draw k * this many candidates if per-site counts
+                                 # are not available before pulling results (see ING-2)
+
+# Water-body type -> realm mapping (source values normalized to lowercase).
+# Estuaries are treated as marine (enterococci). Documented assumption.
+water_body_realm:
+  freshwater: [river/stream, stream, river, lake, reservoir, impoundment, canal, pond, wetland]
+  marine: [estuary, ocean]
+  excluded: [groundwater/well, well, spring, ditch, other]   # out of scope
+
+# Strata. `source` = where the sites come from; `filter` = how sites are assigned.
+# Continent is derived from ISO country code (pycountry-convert).
+strata:
+  us:
+    source: wqp
+    filter: {country: US}
+  europe:
+    source: owq_eionet
+    filter: {continent: Europe}
+  gemstat_africa:
+    source: owq_gemstat
+    filter: {continent: Africa}
+  gemstat_asia:
+    source: owq_gemstat
+    filter: {continent: Asia}
+  gemstat_latin_america:
+    source: owq_gemstat
+    filter: {continent: [South America, North America], exclude_country: [US, CA]}
