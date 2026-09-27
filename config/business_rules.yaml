@@ -1,0 +1,30 @@
+# Hotspot and priority rules. Owner: DE2 drafts, PM approves (Mon 9/28).
+# Every value here is an assumption that must be justified in the report.
+
+daily_collapse: geometric_mean     # replicate samples at the same site/indicator/day -> one sample-day value
+
+exceedance:
+  # A sample-day exceeds if value_cfu_100ml > realm threshold (sampling.yaml › realms).
+  poor_year_exceedance_rate: 0.10  # EPA 2012 RWQC: single-sample value should not be exceeded in more than 10% of samples
+  min_sample_days_per_year: 5      # years with fewer sample-days are "insufficient", not poor/good
+
+persistence:
+  window_years: 5                  # look at each site's most recent N classified years
+  min_poor_years: 3                # persistent hotspot = poor in >= 3 of those years
+
+rainfall:
+  antecedent_windows_days: [2, 3]  # rain_48h = sample day + previous day; rain_72h adds one more day
+  wet_threshold_mm_48h: 10.0       # sample-day is "wet" if rain_48h >= this
+
+trend:
+  method: theil_sen                # slope of annual exceedance rate vs year (per site)
+  min_years: 3
+
+priority:
+  min_sites_per_region: 3          # regions with fewer sampled sites are listed but not ranked
+  normalization: min_max           # across ranked regions, each component scaled to 0..1
+  weights:                         # must sum to 1.0
+    persistence: 0.40              # share of region's sites that are persistent hotspots
+    severity: 0.30                 # median of site median(value / threshold)
+    trend: 0.15                    # median site trend slope (worsening = higher)
+    rain_sensitivity: 0.15         # median site wet_rate / dry_rate
