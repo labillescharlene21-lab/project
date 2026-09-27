@@ -1,0 +1,24 @@
+owq:
+  export_mode: scripted
+  export_endpoint: "https://lume-inventory-api.evan-thomas-3d8.workers.dev/api/wq/export"
+  row_cap: 100000
+  sources:
+    owq_gemstat: GEMStat
+    owq_eionet: Eionet
+  indicators:
+    ecoli: ecoli
+    enterococci: entero
+    fecal_coliform: fc
+    total_coliform: tc
+  loc_types:
+    - canal
+    - ditch
+    - estuary
+    - lake
+    - ocean
+    - other
+    - pond
+    - reservoir
+    - "river/stream"
+    - spring
+    - wetland
