@@ -42,7 +42,6 @@ def sites_file(tmp_path):
 @pytest.fixture(autouse=True)
 def fast(monkeypatch):
     monkeypatch.setattr("src.extract.weather.time.sleep", lambda s: None)
-    monkeypatch.setattr("src.utils.http.time.sleep", lambda s: None)
 
 
 # ---------- pure helpers
