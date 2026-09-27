@@ -1,0 +1,4 @@
+site_key,source_code,latitude,longitude,stratum,realm
+dev:laguna,dev,14.35,121.25,dev,freshwater
+dev:sydney,dev,-33.87,151.21,dev,marine
+dev:ohio,dev,41.50,-81.70,dev,freshwater
