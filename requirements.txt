@@ -1,0 +1,5 @@
+pytest==9.0.3
+responses==0.26.2
+PyYAML==6.0.3
+python-dotenv==1.2.2
+requests==2.34.2
