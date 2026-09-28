@@ -6,15 +6,20 @@ from .config import load_yaml
 from .exceptions import EmptyResponseError, SourceRequestError
 
 _DEFAULT_TIMEOUT = 30
+_DEFAULT_STATUS_FORCELIST = [429, 500, 502, 503, 504]
+
+
+def _http_config() -> dict:
+    return load_yaml("sources").get("http", {})
 
 
 def build_session() -> requests.Session:
-    http_config = load_yaml("sources").get("http", {})
+    cfg = _http_config()
     retry = Retry(
-        total=http_config.get("retry_total", 5),
-        backoff_factor=http_config.get("backoff_factor", 1.0),
-        status_forcelist=http_config.get("status_forcelist", [429, 500, 502, 503, 504]),
-        allowed_methods=frozenset(http_config.get("allowed_methods", ["GET", "POST", "HEAD", "OPTIONS"])),
+        total=cfg.get("max_retries", 5),
+        backoff_factor=cfg.get("backoff_factor", 1.0),
+        status_forcelist=cfg.get("retry_on_status", _DEFAULT_STATUS_FORCELIST),
+        allowed_methods=frozenset(cfg.get("allowed_methods", ["GET", "POST", "HEAD", "OPTIONS"])),
         respect_retry_after_header=True,
     )
     session = requests.Session()
@@ -34,7 +39,8 @@ def request(
     timeout: int | None = None,
     logger=None,
 ) -> requests.Response:
-    timeout = timeout or _DEFAULT_TIMEOUT
+    cfg = _http_config()
+    timeout = timeout or cfg.get("timeout_seconds", _DEFAULT_TIMEOUT)
     try:
         response = session.request(method, url, params=params, json=json_body, timeout=timeout)
     except (requests.ConnectionError, requests.Timeout, requests.exceptions.RetryError) as exc:
