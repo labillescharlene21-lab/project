@@ -7,13 +7,18 @@ from dotenv import load_dotenv
 
 from .exceptions import ConfigError
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/utils/config.py -> repo root
+
 
 def load_env() -> None:
-    """Load variables from a .env file if present. No error if it's absent (Docker sets env vars directly)."""
-    load_dotenv(override=False)
+    """Load variables from the repo-root .env file if present. No error if it's absent
+    (Docker sets env vars directly). override=False so real environment variables
+    (e.g. set by Docker Compose) always win over .env."""
+    load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
 
 
 def get_env(name: str, default: str | None = None, required: bool = True) -> str:
+    load_env()  # cheap; ensures .env is loaded no matter the call order
     value = os.environ.get(name)
     if value is not None and value != "":
         return value
@@ -25,7 +30,10 @@ def get_env(name: str, default: str | None = None, required: bool = True) -> str
 
 
 def _config_dir() -> Path:
-    return Path(get_env("CONFIG_DIR", default="config", required=False))
+    configured = os.environ.get("CONFIG_DIR")
+    if configured:
+        return Path(configured)
+    return PROJECT_ROOT / "config"
 
 
 def load_yaml(name: str) -> dict:

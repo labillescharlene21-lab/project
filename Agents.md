@@ -3,7 +3,7 @@
 Read this file completely before starting any ticket. Tickets reference the conventions below instead of repeating them.
 
 ---
-
+    
 ## 1. Project context
 
 **Project:** Global Water Quality Hotspot Pipeline (university Data Engineering project, graded against a rubric).
@@ -69,7 +69,7 @@ scripts/        make_snapshot.py, fetch_snapshot.py
 - Raw batch folder: `data/raw/{source_code}/batch_id={batch_id}/`.
 
 ### 5.2 batch_id
-- Deterministic: `f"{source_code}-{sha256(json.dumps(params, sort_keys=True, default=str))[:10]}"`.
+- Deterministic: `f"{source_code}_{sha256(json.dumps(params, sort_keys=True, default=str))[:12]}"`.
 - `params` = every parameter that changes what is downloaded (period, indicators, site list hash, K, seed, URL). Never include timestamps.
 - Same parameters → same batch_id → same folder. This is how reruns avoid duplicates.
 
@@ -78,7 +78,7 @@ scripts/        make_snapshot.py, fetch_snapshot.py
 {
   "manifest_version": 1,
   "source_code": "wqp_results",
-  "batch_id": "wqp_results-3f9a2c1b7d",
+  "batch_id": "wqp_results_3f9a2c1b7d12",
   "status": "success | partial | failed",
   "retrieved_at_utc": "2026-09-27T08:15:02Z",
   "params": { "...": "exactly the params used for batch_id" },
