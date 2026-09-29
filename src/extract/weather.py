@@ -184,7 +184,7 @@ def run(**overrides) -> Path:
     # Manifest state (resume)
     previous = read_manifest(batch_dir) or {}
     files = {f["name"]: f for f in previous.get("files", []) if f["name"].startswith("cell_")}
-    requests_log = list(previous.get("requests", []))
+    requests_log = list(previous.get("requests") or previous.get("requests_log") or [])
     warnings = [w for w in previous.get("warnings", []) if w.split(":", 1)[0] in files]
 
     def save(status: str) -> Path:
