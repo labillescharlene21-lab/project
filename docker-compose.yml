@@ -273,6 +273,17 @@ services:
       _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-change_me}
     user: "0:0"
 
+  # Tools service: not started by "docker compose up". Runs one-off commands in the
+  # pipeline image, e.g. docker compose run --rm pipeline python -m pytest -q
+  pipeline:
+    <<: *airflow-common
+    profiles: ["tools"]
+    entrypoint: []
+    command: ["bash"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   airflow-db-data:
   airflow-logs:
