@@ -14,3 +14,9 @@ RUN pip install --no-cache-dir \
     "apache-airflow==${AIRFLOW_VERSION}" \
     -r /requirements.txt \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+
+# Working directory for the project (see docker-compose.yml). Owned by group 0 and
+# group-writable, so it works for any AIRFLOW_UID (containers run as "<uid>:0").
+USER root
+RUN mkdir -p /opt/project && chown airflow:0 /opt/project && chmod 775 /opt/project
+USER airflow
