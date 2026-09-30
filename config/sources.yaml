@@ -10,13 +10,30 @@ http:
 
 owq:
   site_url: https://openwaterquality.org/
-  export_mode: TODO            # "scripted" or "landing_zone"; set by ING-1
-  export_endpoint: TODO        # only if scripted; discovered in ING-1
+  export_mode: scripted        # confirmed via ING-2 spike
+  export_endpoint: "https://lume-inventory-api.evan-thomas-3d8.workers.dev/api/wq/export"
+  row_cap: 100000              # confirmed via ING-2 spike (X-Row-Count / X-Row-Capped response headers)
   sources:                     # source_code -> label used by the OWQ "Source" filter
     owq_gemstat: GEMStat
     owq_eionet: Eionet
-  indicators: [E. coli, Enterococci, Fecal coliform, Total coliform]
-  landing_subdir: landing/owq  # relative to DATA_DIR
+  indicators:                  # friendly name -> `var` query param code (confirmed ING-2)
+    ecoli: ecoli
+    enterococci: entero
+    fecal_coliform: fc
+    total_coliform: tc
+  loc_types:
+    - canal
+    - ditch
+    - estuary
+    - lake
+    - ocean
+    - other
+    - pond
+    - reservoir
+    - "river/stream"
+    - spring
+    - wetland
+  landing_subdir: landing/owq  # relative to DATA_DIR — unused now export_mode is scripted; kept as a documented fallback
   landing_filename_pattern: "owq_{source_code}_{start_year}-{end_year}.{ext}"   # ext: zip | csv | geojson
 
 wqp:
