@@ -96,6 +96,8 @@ x-airflow-common:
     &airflow-common-depends-on
     airflow-db:
       condition: service_healthy
+    postgres:
+      condition: service_healthy
 
 services:
   airflow-db:
@@ -108,6 +110,26 @@ services:
       - airflow-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+      # Project warehouse (water_quality). Separate from Airflow's own airflow-db.
+  postgres:
+    image: postgres:16.15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-water_quality}
+      POSTGRES_USER: ${POSTGRES_USER:-wq_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+      # Every .sql file here runs once, on the first start with an empty volume
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s
       retries: 5
       start_period: 5s
@@ -254,3 +276,4 @@ services:
 volumes:
   airflow-db-data:
   airflow-logs:
+  warehouse-data:
