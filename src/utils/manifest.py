@@ -20,11 +20,13 @@ def sha256_file(path: Path) -> str:
 
 
 def count_csv_rows(path: Path) -> int:
-    """Count data rows (excludes header). Handles UTF-8 BOM and quoted fields containing newlines."""
+    """Count data rows (excludes header and any leading '#' comment lines,
+    e.g. OWQ's attribution/metadata preamble)."""
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.reader(f)
+        lines = (line for line in f if not line.startswith("#"))
+        reader = csv.reader(lines)
         try:
-            next(reader)  # header
+            next(reader)  # real header
         except StopIteration:
             return 0
         return sum(1 for _ in reader)
