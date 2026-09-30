@@ -12,7 +12,7 @@ ENDPOINT = "https://lume-inventory-api.evan-thomas-3d8.workers.dev/api/wq/export
 @pytest.fixture
 def owq_config_dir(tmp_path, monkeypatch):
     cfg_dir = tmp_path / "config"
-    cfg_dir.mkdir()
+    cfg_dir.mkdir(exist_ok=True)
     (cfg_dir / "sampling.yaml").write_text(json.dumps({
         "period": {"start_year": 2015, "end_year": 2015}
     }))
