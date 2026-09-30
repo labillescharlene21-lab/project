@@ -54,6 +54,7 @@ x-airflow-common:
   env_file:
     - path: .env
       required: false
+  working_dir: /opt/project
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -67,12 +68,29 @@ x-airflow-common:
     AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER:-airflow}
     # Simple http server on the scheduler, used by its health check
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
-    AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    # Project settings: where the pipeline code, data and config live inside the container
+    PYTHONPATH: /opt/project
+    DATA_DIR: /opt/project/data
+    CONFIG_DIR: /opt/project/config
+    PIPELINE_MODE: ${PIPELINE_MODE:-snapshot}
+    # Warehouse database. Inside Docker the host is always "postgres" on port 5432,
+    # whatever POSTGRES_PORT is set to on the host machine.
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: '5432'
+    POSTGRES_DB: ${POSTGRES_DB:-water_quality}
+    POSTGRES_USER: ${POSTGRES_USER:-wq_user}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
   volumes:
-    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
-    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
-    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
-    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ./dags:/opt/airflow/dags
+    - airflow-logs:/opt/airflow/logs
+    - ./src:/opt/project/src
+    - ./config:/opt/project/config
+    - ./data:/opt/project/data
+    - ./sql:/opt/project/sql
+    - ./tests:/opt/project/tests
+    - ./outputs:/opt/project/outputs
+    - ./docs:/opt/project/docs
+    - ./scripts:/opt/project/scripts
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -235,3 +253,4 @@ services:
 
 volumes:
   airflow-db-data:
+  airflow-logs:
