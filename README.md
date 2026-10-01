@@ -248,7 +248,41 @@ Rules:
 -->
 
 ## 7. Installation and Prerequisites
+**Required software**
 
+| Software | Version | Notes |
+|---|---|---|
+| Docker Desktop (Windows/Mac) or Docker Engine (Linux) | Any recent version; tested with Docker 29.7.2 | Must be running before any `docker` command |
+| Docker Compose | v2.24 or newer; tested with v5.4.0 | Included with Docker Desktop. Check with `docker compose version` |
+| Git | Any recent version | To clone the repository |
+
+Everything else (Python 3.11, Apache Airflow 3.3.2, PostgreSQL 16.15, and all Python packages) runs inside Docker, so it does **not** need to be installed on your machine.
+
+**Resources**
+
+- **Memory:** Docker must be allowed at least **4 GB** of memory (tested with 7.7 GB). In Docker Desktop: Settings → Resources → Memory. Check the current value with `docker info | grep -i "total memory"`.
+- **Disk:** about **10 GB** free for the Docker images and databases.
+- **Internet:** required for the first start (downloading the Docker images and Python packages) and when the pipeline calls the source APIs.
+- **Ports:** `8080` (Airflow UI) and `5432` (PostgreSQL) must be free. If `5432` is taken by a local PostgreSQL, set `POSTGRES_PORT` to another port in `.env` (see §8).
+
+**Get the project**
+
+```bash
+git clone https://github.com/labillescharlene21-lab/project.git
+cd project
+```
+
+**Optional: create a `.env` file**
+
+The project runs **without** a `.env` file; every setting has a default. Create one only if you want to change a setting:
+
+```bash
+cp .env.example .env
+```
+
+On Windows (Command Prompt), use `copy .env.example .env` instead.
+
+**Linux only:** set `AIRFLOW_UID` in `.env` to your user ID (the output of `id -u`); otherwise files created by the containers in `data/` and `outputs/` may not be writable by you.
 
 <!-- Include: required software and versions (Docker Desktop / Compose v2, Git), minimum Docker memory, disk space, internet access, and the git clone + cp .env.example .env steps. -->
 
@@ -258,6 +292,69 @@ Rules:
 <!-- Include: table of every variable in .env.example (name, example value, description); what lives in config/*.yaml vs .env; statement that no secrets are committed. -->
 
 ## 9. Starting the Docker Services
+
+**Start everything**
+
+```bash
+docker compose up -d
+```
+
+The **first start takes several minutes**: Docker downloads the images and builds the pipeline image from the `Dockerfile`. Later starts take under a minute.
+
+**Check that everything is healthy**
+
+Wait 1–2 minutes, then run:
+
+```bash
+docker compose ps
+```
+
+Every service should show `Up ... (healthy)`. If some show `(health: starting)`, wait a little and run it again. `airflow-init` is not listed: it runs once to set up Airflow, then exits.
+
+**Services and ports**
+
+| Service | What it is | Port on your machine |
+|---|---|---|
+| `postgres` | Project warehouse database (`water_quality`) | `5432` (or `POSTGRES_PORT`) |
+| `airflow-db` | Airflow's own metadata database | not exposed |
+| `airflow-apiserver` | Airflow web UI and API | `8080`: http://localhost:8080 |
+| `airflow-scheduler` | Schedules and runs DAG tasks (LocalExecutor) | none |
+| `airflow-dag-processor` | Reads and parses the DAG files in `dags/` | none |
+| `airflow-init` | One-time setup: database migration and admin user | none (exits when done) |
+| `pipeline` | Tools container for one-off commands, not started by `up` | none |
+
+Log in to Airflow at http://localhost:8080 with `admin` / `change_me` (or the values of `AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD` in `.env`).
+
+**Run the tests**
+
+```bash
+docker compose run --rm pipeline python -m pytest -q
+```
+
+**Check the warehouse database**
+
+```bash
+docker compose exec postgres psql -U wq_user -d water_quality -c "select 1"
+```
+
+**Stop and reset**
+
+| Command | What it does |
+|---|---|
+| `docker compose down` | Stops and removes the containers. **Data is kept.** |
+| `docker compose down -v` | Stops everything **and deletes all data** (both databases). Use for a clean start. |
+
+A full reset also re-runs the SQL files in `sql/` (they only run when the database is created):
+
+```bash
+docker compose down -v && docker compose up -d
+```
+
+**After changing `requirements.txt` or the `Dockerfile`**, rebuild the image:
+
+```bash
+docker compose up -d --build
+```
 
 
 <!-- Include: docker compose up -d / ps / down / down -v; list of services and ports; how to confirm everything is healthy. -->
