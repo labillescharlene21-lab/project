@@ -15,13 +15,13 @@ Items marked **VERIFY** must be confirmed on the provider's site before submissi
 | Harmonized by | Open Water Quality project: UNU-INWEH, Colorado State University, University of Colorado Boulder |
 | URL | https://openwaterquality.org/ (Data tab) · original: https://gemstat.org/ |
 | Format | CSV (observations), GeoJSON (sites) |
-| Retrieval method | TODO after ING-1 spike: scripted export request, or documented landing-zone file |
+| Retrieval method | Scripted export request (confirmed ING-2 spike). Endpoint: `https://lume-inventory-api.evan-thomas-3d8.workers.dev/api/wq/export` — separate Cloudflare Worker domain, not `openwaterquality.org` itself. `GET`, no auth, CORS open. Params: `year_from`, `year_to`, `var` (indicator code), `source=GEMStat`, `loc_type`, `format`. Responses capped at 100,000 rows (`X-Row-Count`/`X-Row-Capped` headers); extractor chunks by year with a loc_type-split fallback on cap. |
 | Coverage | Global; used for Africa, Asia, and Latin America strata |
 | Size (OWQ, all years) | ~400K observations |
 | Update frequency | Unknown. OWQ appears to be a research compilation (manuscript in preparation); treat as a periodic snapshot. VERIFY |
 | License / terms | Observations remain the property of the contributing programmes and must be cited on reuse; each export includes an attribution file. GEMStat's own data policy: VERIFY |
-| Accessed | 2026-09-26 |
-| Known limitations | Already harmonized by OWQ (MPN treated as CFU; censored values filled at half the detection limit; cross-source dedupe at ~1 km). Sparse, irregular sampling in many countries. Original GEMStat access is manual. |
+| Accessed | 2026-09-27 (ING-2 spike + real extraction run; batch_id owq_gemstat_<id>) |
+| Known limitations | Already harmonized by OWQ (MPN treated as CFU; censored values filled at half the detection limit; cross-source dedupe at ~1 km). Sparse, irregular sampling in many countries. Original GEMStat access is manual. `region` field can include non-target strata (e.g. observed value "Canada"); staging sampling must filter on `region`, not just `source`, to correctly select the intended Africa/Asia/Latin America strata. |
  
 ## 2. Eionet bathing water (via Open Water Quality export)
  
@@ -31,13 +31,22 @@ Items marked **VERIFY** must be confirmed on the provider's site before submissi
 | Harmonized by | Open Water Quality project (as above) |
 | URL | https://openwaterquality.org/ (Data tab) |
 | Format | CSV, GeoJSON |
-| Retrieval method | Same as GEMStat (one export per source filter) |
+| Retrieval method | Same scripted endpoint as GEMStat, `source=Eionet`. Confirmed via ING-2 spike; same cap/chunking behavior applies. |
 | Coverage | Europe; main source of marine / enterococci observations |
 | Size (OWQ, all years) | ~2.4M observations |
 | Update frequency | Unknown for OWQ snapshot. Bathing water monitoring itself is seasonal (bathing season). VERIFY |
 | License / terms | As above. EEA data terms: VERIFY |
-| Accessed | 2026-09-26 |
-| Known limitations | Bathing sites only, sampled mainly during the bathing season, so winter conditions are under-represented. Pre-harmonized by OWQ. Originally obtained by OWQ via web scraping. |
+| Accessed | 2026-09-27 (ING-2 spike + real extraction run; batch_id owq_eionet_e86ef04d7716) |
+| Known limitations | Bathing sites only, sampled mainly during the bathing season, so winter conditions are under-represented. Pre-harmonized by OWQ. Originally obtained by OWQ via web scraping. Zero fecal/total coliform data across the full 2015–2025 pull (dataset is scoped to E. coli/enterococci only — expected, not a bug). Zero E. coli/enterococci data from 2022 onward — cause unconfirmed (possible reporting lag vs. dataset cutoff); flagged as VERIFY. |
+
+### Confirmed `var` codes (ING-2 spike)
+
+| Indicator | `var` code |
+|---|---|
+| E. coli | `ecoli` |
+| Enterococci | `entero` |
+| Fecal coliform | `fc` |
+| Total coliform | `tc` |
  
 ## 3. Water Quality Portal (WQP)
  
