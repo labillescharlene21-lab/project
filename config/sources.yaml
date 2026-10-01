@@ -72,4 +72,4 @@ open_meteo:
 
 natural_earth:
   page_url: https://www.naturalearthdata.com/?p=480
-  download_url: TODO           # pin the 10m admin-1 states/provinces zip URL found on page_url
+  download_url: https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip
