@@ -5,3 +5,4 @@ python-dotenv==1.2.2
 requests==2.34.2
 zstandard==0.25.0
 pandas==3.0.6
+geopandas==1.2.0
