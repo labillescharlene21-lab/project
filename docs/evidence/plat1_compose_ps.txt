@@ -1,0 +1,8 @@
+# docker compose ps on a fresh clone of feature/plat-1-docker-compose, no .env
+# Wed Sep 30 17:41:35 PST 2026
+NAME                                       IMAGE                                      COMMAND                  SERVICE                 CREATED         STATUS                        PORTS
+plat1-fresh-test-airflow-apiserver-1       wq-hotspot-pipeline:airflow-3.3.2-py3.11   "/usr/bin/dumb-init …"   airflow-apiserver       2 minutes ago   Up About a minute (healthy)   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+plat1-fresh-test-airflow-dag-processor-1   wq-hotspot-pipeline:airflow-3.3.2-py3.11   "/usr/bin/dumb-init …"   airflow-dag-processor   2 minutes ago   Up About a minute (healthy)   8080/tcp
+plat1-fresh-test-airflow-db-1              postgres:16.15                             "docker-entrypoint.s…"   airflow-db              2 minutes ago   Up 2 minutes (healthy)        5432/tcp
+plat1-fresh-test-airflow-scheduler-1       wq-hotspot-pipeline:airflow-3.3.2-py3.11   "/usr/bin/dumb-init …"   airflow-scheduler       2 minutes ago   Up About a minute (healthy)   8080/tcp
+plat1-fresh-test-postgres-1                postgres:16.15                             "docker-entrypoint.s…"   postgres                2 minutes ago   Up 2 minutes (healthy)        0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
