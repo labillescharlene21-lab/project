@@ -47,6 +47,7 @@ wqp:
   characteristic_map:
     e_coli: "Escherichia coli"
     enterococci: "Enterococcus"
+    enterococci_alt: "Enterococci"
     fecal_coliform: "Fecal Coliform"
     total_coliform: "Total Coliform"
   # Exact, case-sensitive WQP siteType values for surface water. VERIFY via Codes/Sitetype.
