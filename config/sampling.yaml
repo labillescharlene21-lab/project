@@ -38,7 +38,7 @@ sampling:
 # Water-body type -> realm mapping (source values normalized to lowercase).
 # Estuaries are treated as marine (enterococci). Documented assumption.
 water_body_realm:
-  freshwater: [river/stream, stream, river, lake, reservoir, impoundment, canal, pond, wetland]
+  freshwater: [river/stream, stream, river, "lake, reservoir, impoundment", lake, reservoir, impoundment, canal, pond, wetland]
   marine: [estuary, ocean]
   excluded: [groundwater/well, well, spring, ditch, other]   # out of scope
 
