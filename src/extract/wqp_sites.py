@@ -52,15 +52,20 @@ def _load_wqp_config() -> dict:
     return cfg.load_yaml("sources")["wqp"]
 
 
-def primary_characteristic_names(wqp_cfg: dict, sampling_cfg: dict) -> list[str]:
-    """WQP characteristicName strings of the primary indicators (from sampling.yaml realms)."""
+def indicator_names(wqp_cfg: dict, indicator: str) -> list[str]:
+    """WQP names for one indicator: its map entry plus any '<indicator>_alt*' spellings."""
     char_map = wqp_cfg["characteristic_map"]
-    names = []
+    if indicator not in char_map:
+        raise ConfigError(f"indicator {indicator!r} not in wqp.characteristic_map")
+    alts = [v for k, v in char_map.items() if k.startswith(f"{indicator}_alt")]
+    return [char_map[indicator], *alts]
+
+
+def primary_characteristic_names(wqp_cfg: dict, sampling_cfg: dict) -> list[str]:
+    """WQP characteristicName strings of the primary indicators, including alternate spellings."""
+    names: list[str] = []
     for realm, spec in sampling_cfg["realms"].items():
-        indicator = spec["primary_indicator"]
-        if indicator not in char_map:
-            raise ConfigError(f"realm {realm!r}: primary indicator {indicator!r} not in wqp.characteristic_map")
-        names.append(char_map[indicator])
+        names.extend(indicator_names(wqp_cfg, spec["primary_indicator"]))
     return sorted(set(names))
 
 
@@ -193,10 +198,11 @@ def build_eligible_sites(summary: pd.DataFrame, wqp_cfg: dict, sampling_cfg: dic
         logger.info("Dropped site type %r (%s): %d sites", raw_type, reason, group[SITE_COL].nunique())
     df = df[df["realm"].notna()]
 
-    # Count only the primary indicator of the site's realm.
-    char_map = wqp_cfg["characteristic_map"]
-    primary = {realm: char_map[spec["primary_indicator"]] for realm, spec in sampling_cfg["realms"].items()}
-    df = df[df[CHAR_COL] == df["realm"].map(primary)]
+
+    # Count only the primary indicator of the site's realm (all of its spellings).
+    pairs = {(realm, name) for realm, spec in sampling_cfg["realms"].items()
+             for name in indicator_names(wqp_cfg, spec["primary_indicator"])}
+    df = df[pd.MultiIndex.from_frame(df[["realm", CHAR_COL]]).isin(pairs)]
 
     if df.empty:
         logger.warning("No candidate sites after period, site type and indicator filters")
