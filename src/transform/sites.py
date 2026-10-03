@@ -351,9 +351,12 @@ def _write_parquet(df: pd.DataFrame, path: Path) -> None:
     tmp.replace(path)
 
 
-def write_drop_log(drops: dict[str, Counter], batch_id: str) -> Path:
-    """Replace this stage's rows in the shared drop log; keep other stages (STG-2)."""
-    rows = [{"stage": "sites", "source_code": src, "reason": reason,
+def write_drop_log(drops: dict[str, Counter], batch_id: str, stage: str = "sites") -> Path:
+    """Replace this stage's rows in the shared drop log; keep other stages' rows.
+
+    STG-1 writes stage="sites", STG-2 writes stage="observations".
+    """
+    rows = [{"stage": stage, "source_code": src, "reason": reason,
              "row_count": n, "batch_id": batch_id}
             for src, counts in sorted(drops.items())
             for reason, n in sorted(counts.items()) if n]
@@ -361,7 +364,7 @@ def write_drop_log(drops: dict[str, Counter], batch_id: str) -> Path:
     path = paths.staging_dir() / "_drop_log.parquet"
     if path.exists():
         old = pd.read_parquet(path)
-        new = pd.concat([old[old["stage"] != "sites"], new], ignore_index=True)
+        new = pd.concat([old[old["stage"] != stage], new], ignore_index=True)
     _write_parquet(new.astype(DROP_LOG_DTYPES), path)
     return path
 
