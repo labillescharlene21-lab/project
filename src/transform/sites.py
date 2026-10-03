@@ -11,9 +11,11 @@ sampled_sites.csv, Natural Earth admin-1) and writes:
 Run:  python -m src.transform.sites
 """
 from __future__ import annotations
-from src.utils.sampling import stratified_sample
 
+import argparse
+import json
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 import geopandas as gpd
@@ -21,8 +23,9 @@ import pandas as pd
 import pycountry_convert as pcc
 
 from src.utils import config as cfg
-from src.utils import manifest, paths
+from src.utils import log, manifest, paths
 from src.utils.exceptions import ConfigError
+from src.utils.sampling import stratified_sample
 
 STAGE = "staging"
 SOURCE_CODE = "stg_sites"  # batch / manifest code for this step
@@ -334,3 +337,113 @@ def finalize_sampled(sites: pd.DataFrame) -> pd.DataFrame:
     out = sites.loc[sites["is_sampled"], SAMPLED_COLUMNS].reset_index(drop=True)
     _check_unique(out, "sampled_sites")
     return out
+# ---------------------------------------------------------------- write outputs
+
+DROP_LOG_DTYPES = {"stage": "string", "source_code": "string", "reason": "string",
+                   "row_count": "int32", "batch_id": "string"}
+
+
+def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    """Write to a temp file, then rename, so a crash never leaves a half-written file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    df.to_parquet(tmp, index=False)
+    tmp.replace(path)
+
+
+def write_drop_log(drops: dict[str, Counter], batch_id: str) -> Path:
+    """Replace this stage's rows in the shared drop log; keep other stages (STG-2)."""
+    rows = [{"stage": "sites", "source_code": src, "reason": reason,
+             "row_count": n, "batch_id": batch_id}
+            for src, counts in sorted(drops.items())
+            for reason, n in sorted(counts.items()) if n]
+    new = pd.DataFrame(rows, columns=list(DROP_LOG_DTYPES)).astype(DROP_LOG_DTYPES)
+    path = paths.staging_dir() / "_drop_log.parquet"
+    if path.exists():
+        old = pd.read_parquet(path)
+        new = pd.concat([old[old["stage"] != "sites"], new], ignore_index=True)
+    _write_parquet(new.astype(DROP_LOG_DTYPES), path)
+    return path
+
+
+# ---------------------------------------------------------------- entry point
+
+def build_sampled_sites(run_params: dict | None = None) -> str:
+    """STG-1 entry point (ING-6 calls this). Returns the staging batch_id.
+
+    run_params may override start_year, end_year, k and seed; anything else
+    comes from sampling.yaml. Unknown keys are ignored.
+    """
+    run_params = run_params or {}
+    s_cfg, m_cfg = cfg.load_yaml("sampling"), cfg.load_yaml("mappings")
+    start = int(run_params.get("start_year", s_cfg["period"]["start_year"]))
+    end = int(run_params.get("end_year", s_cfg["period"]["end_year"]))
+    k = int(run_params.get("k", s_cfg["sampling"]["k_per_stratum_realm"]))
+    seed = int(run_params.get("seed", s_cfg["random_seed"]))
+
+    # Load raw
+    regions, ne_batch = load_regions()
+    inputs = {NE_SOURCE: ne_batch}
+    owq_parts, drops = [], {}
+    for src in OWQ_SOURCES:
+        rows, raw_batch = load_owq(src)
+        inputs[src] = raw_batch
+        part, drops[src] = build_owq_sites(rows, src, s_cfg, m_cfg, start, end)
+        owq_parts.append(part)
+    wqp, wqp_summary, inputs[WQP_SOURCE] = load_wqp_sampled()
+
+    # Regions, continent, strata, sampling (OWQ); regions + continent (WQP)
+    owq = add_continent(assign_regions(pd.concat(owq_parts, ignore_index=True), regions), m_cfg)
+    owq["stratum"] = assign_strata(owq, s_cfg["strata"])
+    for src in OWQ_SOURCES:
+        drops[src]["no_stratum"] += int((owq["source_code"].eq(src) & owq["stratum"].isna()).sum())
+    owq, owq_summary = sample_owq(owq, s_cfg, k, seed)
+    wqp = add_continent(assign_regions(wqp, regions), m_cfg)
+
+    sites = finalize_sites(pd.concat([wqp, owq], ignore_index=True))
+    sampled = finalize_sampled(sites)
+    summary = pd.concat([wqp_summary.assign(sampled_by="ING-2 (WQP)"),
+                         owq_summary.assign(sampled_by="STG-1 (OWQ)")], ignore_index=True)
+
+    params = {"start_year": start, "end_year": end, "k": k, "seed": seed, "inputs": inputs}
+    batch_id = manifest.make_batch_id(SOURCE_CODE, params)
+    logger = log.get_logger(STAGE, SOURCE_CODE, batch_id)
+    match_counts = sites.groupby("source_code")["region_match"].value_counts().unstack(fill_value=0)
+    logger.info("Region match counts:\n%s", match_counts.to_string())
+    logger.info("Sampling summary per stratum x realm:\n%s", summary.to_string(index=False))
+    logger.info("Drops: %s", {s: dict(c) for s, c in drops.items()})
+
+    # Write outputs
+    staging = paths.staging_dir()
+    _write_parquet(sites, staging / "sites" / "sites.parquet")
+    _write_parquet(sampled, staging / "sampled_sites" / "sampled_sites.parquet")
+    write_drop_log(drops, batch_id)
+    info = {
+        "stage": STAGE, "source_code": SOURCE_CODE, "batch_id": batch_id,
+        "created_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "params": params,
+        "row_counts": {"sites": len(sites), "sampled_sites": len(sampled)},
+        "region_match": {src: {m: int(n) for m, n in row.items()}
+                         for src, row in match_counts.iterrows()},
+        "drops": {s: dict(c) for s, c in drops.items()},
+        "sampling_summary": json.loads(summary.to_json(orient="records")),
+    }
+    with open(staging / "sampled_sites" / "_manifest.json", "w", encoding="utf-8") as f:
+        json.dump(info, f, indent=2)
+    logger.info("Wrote %d sites, %d sampled sites", len(sites), len(sampled))
+    return batch_id
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="STG-1: build sites.parquet and sampled_sites.parquet")
+    parser.add_argument("--start-year", type=int)
+    parser.add_argument("--end-year", type=int)
+    parser.add_argument("--k", type=int)
+    parser.add_argument("--seed", type=int)
+    args = parser.parse_args()
+    run_params = {name: v for name, v in vars(args).items() if v is not None}
+    print(f"STG-1 done: batch {build_sampled_sites(run_params)}")
+
+
+if __name__ == "__main__":
+    main()
