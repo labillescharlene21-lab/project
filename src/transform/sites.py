@@ -11,6 +11,7 @@ sampled_sites.csv, Natural Earth admin-1) and writes:
 Run:  python -m src.transform.sites
 """
 from __future__ import annotations
+from src.utils.sampling import stratified_sample
 
 from collections import Counter
 from pathlib import Path
@@ -32,6 +33,20 @@ NE_SOURCE = "natural_earth"
 NE_SHP = "ne_10m_admin_1_states_provinces.shp"
 NEAREST_MAX_M = 25_000      # issue: max distance for "nearest" region match
 METRIC_CRS = "EPSG:6933"    # equal-area, units = meters
+WQP_SOURCE = "wqp_summary"            # ING-2 raw batch folder
+WQP_SITES_CSV = "sampled_sites.csv"
+WQP_SUMMARY_CSV = "sampling_summary.csv"
+
+# Column order and types from config/staging_schema.yaml (STG-0)
+SITES_DTYPES = {
+    "site_key": "string", "source_code": "string", "source_site_id": "string",
+    "site_name": "string", "source_region": "string", "water_body_type": "string",
+    "realm": "string", "latitude": "float64", "longitude": "float64",
+    "country_iso": "string", "continent": "string", "region_code": "string",
+    "region_match": "string", "stratum": "string", "n_samples": "int32",
+    "n_years": "int16", "is_eligible": "bool", "is_sampled": "bool",
+}
+SAMPLED_COLUMNS = ["site_key", "source_code", "latitude", "longitude", "stratum", "realm"]
 
 
 # ---------------------------------------------------------------- load raw
@@ -267,3 +282,55 @@ def assign_strata(sites: pd.DataFrame, strata_cfg: dict) -> pd.Series:
             mask &= ~sites["country_iso"].isin(_as_list(f["exclude_country"]))
         stratum[mask] = name
     return stratum
+# ---------------------------------------------------------------- WQP + sampling
+
+def load_wqp_sampled() -> tuple[pd.DataFrame, pd.DataFrame, str]:
+    """ING-2's WQP sites (already sampled, stratum 'us') and its sampling summary."""
+    batch_dir = latest_success_batch(WQP_SOURCE)
+    sites = pd.read_csv(batch_dir / WQP_SITES_CSV,
+                        dtype={"site_key": str, "source_code": str, "source_site_id": str})
+    summary = pd.read_csv(batch_dir / WQP_SUMMARY_CSV)
+    sites = sites.rename(columns={"site_type": "water_body_type"})
+    sites["site_name"] = None
+    sites["source_region"] = None
+    sites["is_eligible"] = True
+    sites["is_sampled"] = True
+    return sites, summary, batch_id_of(batch_dir)
+
+
+def sample_owq(owq_sites: pd.DataFrame, sampling_cfg: dict, k: int, seed: int
+               ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Sample eligible OWQ sites per stratum x realm with DE1's stratified_sample.
+
+    Returns (owq_sites with is_sampled, summary per stratum x realm).
+    """
+    s = sampling_cfg["sampling"]
+    pool = owq_sites[owq_sites["is_eligible"] & owq_sites["stratum"].notna()]
+    sampled, summary = stratified_sample(
+        pool, stratum_col="stratum", realm_col="realm", k=k, seed=seed,
+        take_all_if_fewer=s["take_all_if_fewer"], min_sites_to_keep=s["min_sites_to_keep"],
+    )
+    out = owq_sites.copy()
+    out["is_sampled"] = out["site_key"].isin(sampled["site_key"])
+    return out, summary
+
+
+def _check_unique(df: pd.DataFrame, name: str) -> None:
+    dupes = df["site_key"][df["site_key"].duplicated()]
+    if len(dupes):
+        raise ValueError(f"{name}: duplicate site_key values, e.g. {dupes.head(5).tolist()}")
+
+
+def finalize_sites(sites: pd.DataFrame) -> pd.DataFrame:
+    """Exactly the STG-0 `sites` columns, in order, typed, sorted by site_key."""
+    out = sites[list(SITES_DTYPES)].astype(SITES_DTYPES)
+    out = out.sort_values("site_key", kind="mergesort").reset_index(drop=True)
+    _check_unique(out, "sites")
+    return out
+
+
+def finalize_sampled(sites: pd.DataFrame) -> pd.DataFrame:
+    """The ING-4 contract: exactly six columns, one row per sampled site."""
+    out = sites.loc[sites["is_sampled"], SAMPLED_COLUMNS].reset_index(drop=True)
+    _check_unique(out, "sampled_sites")
+    return out
