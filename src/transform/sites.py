@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
+import geopandas as gpd
 import pandas as pd
 
 from src.utils import config as cfg
@@ -25,6 +26,10 @@ SOURCE_CODE = "stg_sites"  # batch / manifest code for this step
 OWQ_SOURCES = ("owq_gemstat", "owq_eionet")
 OWQ_COLUMNS = ["date", "indicator", "value", "unit", "latitude", "longitude",
                "source", "region", "water_body"]
+NE_SOURCE = "natural_earth"
+NE_SHP = "ne_10m_admin_1_states_provinces.shp"
+NEAREST_MAX_M = 25_000      # issue: max distance for "nearest" region match
+METRIC_CRS = "EPSG:6933"    # equal-area, units = meters
 
 
 # ---------------------------------------------------------------- load raw
@@ -151,3 +156,55 @@ def build_owq_sites(rows: pd.DataFrame, source_code: str, sampling_cfg: dict,
     sites["site_key"] = source_code + ":" + sites["source_site_id"]
     sites["site_name"] = None  # OWQ provides no site names
     return sites, drops
+# ---------------------------------------------------------------- regions
+
+def load_regions() -> tuple[gpd.GeoDataFrame, str]:
+    """Natural Earth admin-1 polygons from the latest successful batch."""
+    batch_dir = latest_success_batch(NE_SOURCE)
+    shp = next(batch_dir.rglob(NE_SHP), None)
+    if shp is None:
+        raise FileNotFoundError(f"{NE_SHP} not found in {batch_dir}")
+    regions = gpd.read_file(shp)[["adm1_code", "iso_a2", "adm0_a3", "geometry"]]
+    return regions.to_crs("EPSG:4326"), batch_id_of(batch_dir)
+
+
+def assign_regions(sites: pd.DataFrame, regions: gpd.GeoDataFrame) -> pd.DataFrame:
+    """Add region_code, country_iso and region_match ('within' | 'nearest' | 'none').
+
+    within:  point inside an admin-1 polygon (EPSG:4326)
+    nearest: closest polygon within NEAREST_MAX_M, measured in METRIC_CRS
+    none:    nothing within NEAREST_MAX_M -> region_code and country_iso are null
+    A point on a shared border can match two regions; the lowest adm1_code wins,
+    so the result is deterministic.
+    """
+    pts = gpd.GeoDataFrame(
+        sites[["site_key"]].copy(),
+        geometry=gpd.points_from_xy(sites["longitude"], sites["latitude"]),
+        crs="EPSG:4326",
+    )
+    reg = regions[["adm1_code", "iso_a2", "adm0_a3", "geometry"]]
+    keep = ["site_key", "adm1_code", "iso_a2", "adm0_a3", "region_match"]
+
+    within = gpd.sjoin(pts, reg, how="inner", predicate="within")
+    within = within.sort_values(["site_key", "adm1_code"]).drop_duplicates("site_key")
+    within["region_match"] = "within"
+    matched = [within[keep]]
+
+    rest = pts[~pts["site_key"].isin(within["site_key"])]
+    if len(rest):
+        # The metric projection is undefined at the poles: clip polygons to +-85 deg first
+        reg_m = reg.copy()
+        reg_m["geometry"] = reg_m.geometry.clip_by_rect(-180, -85, 180, 85)
+        reg_m = reg_m[~reg_m.geometry.is_empty].to_crs(METRIC_CRS)
+        nearest = gpd.sjoin_nearest(rest.to_crs(METRIC_CRS), reg_m,
+                                    how="inner", max_distance=NEAREST_MAX_M)
+        nearest = nearest.sort_values(["site_key", "adm1_code"]).drop_duplicates("site_key")
+        nearest["region_match"] = "nearest"
+        matched.append(nearest[keep])
+
+    out = sites.merge(pd.concat(matched, ignore_index=True), on="site_key", how="left")
+    out["region_match"] = out["region_match"].fillna("none")
+    out["region_code"] = out["adm1_code"]
+    # Natural Earth uses '-99' when iso_a2 is unknown: fall back to adm0_a3 (STG-0 schema)
+    out["country_iso"] = out["iso_a2"].where(out["iso_a2"] != "-99", out["adm0_a3"])
+    return out.drop(columns=["adm1_code", "iso_a2", "adm0_a3"])
