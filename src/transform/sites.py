@@ -12,10 +12,12 @@ Run:  python -m src.transform.sites
 """
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
 
+from src.utils import config as cfg
 from src.utils import manifest, paths
 
 STAGE = "staging"
@@ -70,3 +72,82 @@ def load_owq(source_code: str) -> tuple[pd.DataFrame, str]:
             else pd.DataFrame(columns=OWQ_COLUMNS))
     rows["source_code"] = source_code
     return rows, batch_id_of(batch_dir)
+
+# ---------------------------------------------------------------- OWQ sites
+
+def realm_lookup(sampling_cfg: dict) -> dict[str, str]:
+    """water_body (lowercase) -> 'freshwater' | 'marine' | 'excluded' (sampling.yaml)."""
+    lookup = {}
+    for realm, names in sampling_cfg["water_body_realm"].items():
+        for name in names:
+            lookup[str(name).strip().lower()] = realm
+    return lookup
+
+
+def owq_site_id(lat: float, lon: float) -> str:
+    """mappings.yaml: coordinates rounded to 5 decimals."""
+    return f"{round(lat, 5):.5f}_{round(lon, 5):.5f}"
+
+
+def build_owq_sites(rows: pd.DataFrame, source_code: str, sampling_cfg: dict,
+                    mappings_cfg: dict, start_year: int, end_year: int
+                    ) -> tuple[pd.DataFrame, Counter]:
+    """One row per OWQ site with realm, n_samples, n_years and is_eligible.
+
+    Returns (sites, drops). drops counts sites removed per reason, except
+    missing_coordinates, which counts raw rows (they cannot form a site).
+    """
+    drops: Counter = Counter()
+    df = rows.copy()
+
+    # 1. Coordinates
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+    coords_ok = df["latitude"].between(-90, 90) & df["longitude"].between(-180, 180)
+    drops["missing_coordinates"] += int((~coords_ok).sum())
+    df = df[coords_ok].copy()
+
+    # 2. Site id from rounded coordinates
+    df["source_site_id"] = [owq_site_id(la, lo)
+                            for la, lo in zip(df["latitude"], df["longitude"])]
+    df["water_body"] = df["water_body"].str.strip().str.lower()
+
+    # 3. One row per site (lat/lon = the rounded values the id is built from)
+    df["_lat5"] = df["latitude"].round(5)
+    df["_lon5"] = df["longitude"].round(5)
+    sites = df.groupby("source_site_id", sort=True).agg(
+        latitude=("_lat5", "first"),
+        longitude=("_lon5", "first"),
+        water_body_type=("water_body", lambda s: s.mode().iat[0]),  # ties -> alphabetical
+        source_region=("region", "first"),
+    )
+
+    # 4. Realm from water-body type
+    sites["realm"] = sites["water_body_type"].map(realm_lookup(sampling_cfg))
+    excluded = sites["realm"] == "excluded"
+    unmapped = sites["realm"].isna()
+    drops["water_body_excluded"] += int(excluded.sum())
+    drops["water_body_unmapped"] += int(unmapped.sum())
+    sites = sites[~excluded & ~unmapped].copy()
+
+    # 5. Eligibility: primary indicator of the site's realm, within the period
+    primary = {realm: c["primary_indicator"] for realm, c in sampling_cfg["realms"].items()}
+    df["indicator_code"] = df["indicator"].map(mappings_cfg["indicator_names"][source_code])
+    df["year"] = pd.to_numeric(df["date"].str[:4], errors="coerce")
+    df = df.join(sites["realm"], on="source_site_id", how="inner")
+    counted = df[(df["indicator_code"] == df["realm"].map(primary))
+                 & df["year"].between(start_year, end_year)]
+    stats = counted.groupby("source_site_id").agg(
+        n_samples=("year", "size"), n_years=("year", "nunique"))
+    sites = sites.join(stats)
+    sites[["n_samples", "n_years"]] = sites[["n_samples", "n_years"]].fillna(0).astype(int)
+
+    elig = sampling_cfg["eligibility"]
+    sites["is_eligible"] = ((sites["n_samples"] >= elig["min_samples"])
+                            & (sites["n_years"] >= elig["min_distinct_years"]))
+
+    sites = sites.reset_index()
+    sites["source_code"] = source_code
+    sites["site_key"] = source_code + ":" + sites["source_site_id"]
+    sites["site_name"] = None  # OWQ provides no site names
+    return sites, drops
