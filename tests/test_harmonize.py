@@ -1,6 +1,7 @@
 """Tests for STG-2's pure value/unit/censoring rules (src/transform/harmonize.py)."""
 import pytest
-
+import pandas as pd
+from src.transform import staging as stg
 from src.transform import harmonize as h
 from src.utils import config as cfg
 
@@ -123,3 +124,59 @@ def test_real_mappings_handle_observed_wqp_values():
     assert (p.value, p.direction) == (5.0, "<")
     assert h.unit_multiplier("#/100mL", m["units"]) == 1.0
     assert h.unit_multiplier("MPN", m["units"]) is None    # no volume: unmapped until the PM decides
+
+# ---------------------------------------------------------------- staging.py (synthetic rows)
+
+MAPPINGS = {
+    "indicator_names": {"wqp": {"Escherichia coli": "e_coli"}},
+    "filters": {"wqp_media_keep": ["Water"], "wqp_activity_type_exclude_contains": ["Blank"],
+                "wqp_result_status_exclude": ["Rejected"]},
+    "censoring": CENSORING,
+    "units": UNITS,
+}
+
+
+def _wqp_row(**overrides):
+    row = dict(source_code="wqp", source_record_id="r", source_site_id="S1", activity_id="A",
+               activity_type="Sample-Routine", indicator_label="Escherichia coli",
+               date_text="2020-06-01", value_text="10", unit_text="cfu/100mL", condition_text="",
+               limit_text="", limit_unit_text="", result_status="Final", media="Water",
+               raw_batch_id="b", raw_file="chunk_0001.csv")
+    row.update(overrides)
+    return row
+
+
+def test_harmonize_rows_drops_unmapped_unit_and_reconciles():
+    rows = pd.DataFrame([
+        _wqp_row(source_record_id="ok"),
+        _wqp_row(source_record_id="unit", unit_text="MPN"),                 # no volume: unmapped
+        _wqp_row(source_record_id="site", source_site_id="OTHER"),          # not sampled
+        _wqp_row(source_record_id="old", date_text="2010-01-01"),           # out of period
+        _wqp_row(source_record_id="blank", activity_type="Quality Control Sample-Field Blank"),
+        _wqp_row(source_record_id="cens", value_text="<10"),
+        _wqp_row(source_record_id="ok"),                                    # duplicate obs_key
+    ])
+    obs, drops, unmapped = stg.harmonize_rows(rows, "wqp", {"wqp:S1"}, 2015, 2025, MAPPINGS)
+    assert len(rows) == len(obs) + sum(drops.values())                    # reconciles
+    assert set(obs["source_record_id"]) == {"ok", "cens"}
+    assert drops["unit_unmapped"] == 1 and unmapped == {"MPN": 1}
+    assert drops["site_not_sampled"] == 1 and drops["date_out_of_period"] == 1
+    assert drops["qc_blank"] == 1 and drops["duplicate_obs_key"] == 1
+    cens = obs.set_index("source_record_id").loc["cens"]
+    assert cens["value_cfu_100ml"] == 5.0 and cens["censor_direction"] == "<"
+
+
+def test_write_partitions_leaves_no_old_files(tmp_path):
+    root = tmp_path / "observations"
+    stale = root / "source_code=wqp" / "year=1999" / "part-0000.parquet"
+    stale.parent.mkdir(parents=True)
+    stale.touch()
+    obs = pd.DataFrame({"obs_key": ["wqp:a", "wqp:b"], "source_code": ["wqp", "wqp"],
+                        "year": [2020, 2021], "value_cfu_100ml": [1.0, 2.0]})
+    parts = stg.write_partitions(obs, root, {"batch_id": "test"})
+    assert not stale.exists()
+    files = sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file())
+    assert files == ["_manifest.json",
+                     "source_code=wqp/year=2020/part-0000.parquet",
+                     "source_code=wqp/year=2021/part-0000.parquet"]
+    assert [p["rows"] for p in parts] == [1, 1]
