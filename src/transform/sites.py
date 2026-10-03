@@ -120,7 +120,7 @@ def build_owq_sites(rows: pd.DataFrame, source_code: str, sampling_cfg: dict,
     """One row per OWQ site with realm, n_samples, n_years and is_eligible.
 
     Returns (sites, drops). drops counts sites removed per reason, except
-    missing_coordinates, which counts raw rows (they cannot form a site).
+    bad_coordinates, which counts raw rows (they cannot form a site).
     """
     drops: Counter = Counter()
     df = rows.copy()
@@ -129,7 +129,7 @@ def build_owq_sites(rows: pd.DataFrame, source_code: str, sampling_cfg: dict,
     df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
     df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
     coords_ok = df["latitude"].between(-90, 90) & df["longitude"].between(-180, 180)
-    drops["missing_coordinates"] += int((~coords_ok).sum())
+    drops["bad_coordinates"] += int((~coords_ok).sum())
     df = df[coords_ok].copy()
 
     # 2. Site id from rounded coordinates
