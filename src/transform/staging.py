@@ -15,14 +15,21 @@ Run:  python -m src.transform.staging
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
+import json
+import shutil
 from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 
 from src.transform import harmonize as h
 from src.transform.sites import (OWQ_SOURCES, batch_id_of, latest_success_batch,
-                                 owq_site_id, read_owq_csv)
+                                 owq_site_id, read_owq_csv, write_drop_log)
+from src.utils import config as cfg
+from src.utils import log, manifest, paths
 
 STAGE = "staging"
 SOURCE_CODE = "stg_observations"  # batch / manifest code for this step
@@ -213,3 +220,105 @@ def harmonize_rows(rows: pd.DataFrame, source_code: str, sampled_keys: set,
     })
     out = out.astype(OBS_DTYPES)[OBS_COLUMNS].reset_index(drop=True)
     return out, drops, unmapped
+
+# ---------------------------------------------------------------- write
+
+PARTITION_COLS = ["source_code", "year"]
+
+
+def write_partitions(obs: pd.DataFrame, root: Path, info: dict) -> list[dict]:
+    """Write source_code=/year= partitions plus _manifest.json, replacing the whole dataset.
+
+    Everything goes to a temp folder that is then swapped in: a rerun never leaves
+    partitions from a previous run behind, and a crash never leaves a half-written dataset.
+    """
+    tmp = root.with_name(root.name + ".tmp")
+    old = root.with_name(root.name + ".old")
+    for folder in (tmp, old):
+        if folder.exists():
+            shutil.rmtree(folder)
+    tmp.mkdir(parents=True)
+    parts = []
+    for (src, year), part in obs.groupby(PARTITION_COLS, sort=True):
+        folder = tmp / f"source_code={src}" / f"year={int(year)}"
+        folder.mkdir(parents=True)
+        (part.drop(columns=PARTITION_COLS)
+             .sort_values("obs_key", kind="mergesort")
+             .to_parquet(folder / "part-0000.parquet", index=False))
+        parts.append({"source_code": src, "year": int(year), "rows": len(part)})
+    with open(tmp / "_manifest.json", "w", encoding="utf-8") as f:
+        json.dump({**info, "partitions": parts}, f, indent=2)
+    if root.exists():
+        root.rename(old)
+    tmp.rename(root)
+    if old.exists():
+        shutil.rmtree(old)
+    return parts
+
+
+# ---------------------------------------------------------------- entry point
+
+def build_staging(run_params: dict | None = None) -> str:
+    """STG-2 entry point (ING-6 calls this). Returns the staging batch_id.
+
+    run_params may override start_year and end_year; everything else comes from config.
+    Needs STG-1's sampled_sites.parquet.
+    """
+    run_params = run_params or {}
+    s_cfg, m_cfg = cfg.load_yaml("sampling"), cfg.load_yaml("mappings")
+    start = int(run_params.get("start_year", s_cfg["period"]["start_year"]))
+    end = int(run_params.get("end_year", s_cfg["period"]["end_year"]))
+
+    staging = paths.staging_dir()
+    sampled_path = staging / "sampled_sites" / "sampled_sites.parquet"
+    if not sampled_path.exists():
+        raise FileNotFoundError(f"{sampled_path} not found: run STG-1 (python -m src.transform.sites) first")
+    sampled_keys = set(pd.read_parquet(sampled_path, columns=["site_key"])["site_key"])
+
+    loaders = [(WQP, lambda: load_wqp_rows(m_cfg["record_id"]["wqp"]["fields"]))]
+    loaders += [(src, lambda src=src: load_owq_rows(src)) for src in OWQ_SOURCES]
+    inputs, counts, drops, unmapped, frames = {}, {}, {}, {}, []
+    for src, load in loaders:
+        rows, inputs[src] = load()
+        obs, drops[src], unmapped[src] = harmonize_rows(rows, src, sampled_keys, start, end, m_cfg)
+        counts[src] = {"rows_in": len(rows), "rows_out": len(obs),
+                       "rows_dropped": sum(drops[src].values())}
+        if counts[src]["rows_in"] != counts[src]["rows_out"] + counts[src]["rows_dropped"]:
+            raise RuntimeError(f"{src}: rows in != rows out + drops ({counts[src]})")
+        frames.append(obs)
+    obs = pd.concat(frames, ignore_index=True)
+
+    params = {"start_year": start, "end_year": end, "inputs": inputs,
+              "sampled_sites_sha256": manifest.sha256_file(sampled_path)}
+    batch_id = manifest.make_batch_id(SOURCE_CODE, params)
+    logger = log.get_logger(STAGE, SOURCE_CODE, batch_id)
+    for src, c in counts.items():
+        logger.info("%s: rows in %d, rows out %d, drops %s", src, c["rows_in"], c["rows_out"],
+                    {k: v for k, v in drops[src].items() if v})
+        if unmapped[src]:
+            logger.warning("%s: unmapped units (dropped): %s", src, dict(unmapped[src].most_common()))
+
+    info = {
+        "stage": STAGE, "source_code": SOURCE_CODE, "batch_id": batch_id,
+        "created_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "params": params, "row_counts": counts, "partition_by": PARTITION_COLS,
+        "drops": {s: {k: v for k, v in d.items() if v} for s, d in drops.items()},
+        "unmapped_units": {s: dict(u.most_common()) for s, u in unmapped.items()},
+    }
+    parts = write_partitions(obs, staging / "observations", info)
+    write_drop_log(drops, batch_id, stage="observations")
+    logger.info("Wrote %d observations in %d partitions", len(obs), len(parts))
+    return batch_id
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="STG-2: harmonize observations into staging Parquet")
+    parser.add_argument("--start-year", type=int)
+    parser.add_argument("--end-year", type=int)
+    args = parser.parse_args()
+    run_params = {name: v for name, v in vars(args).items() if v is not None}
+    print(f"STG-2 done: batch {build_staging(run_params)}")
+
+
+if __name__ == "__main__":
+    main()
