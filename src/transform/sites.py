@@ -17,9 +17,11 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import pycountry_convert as pcc
 
 from src.utils import config as cfg
 from src.utils import manifest, paths
+from src.utils.exceptions import ConfigError
 
 STAGE = "staging"
 SOURCE_CODE = "stg_sites"  # batch / manifest code for this step
@@ -208,3 +210,60 @@ def assign_regions(sites: pd.DataFrame, regions: gpd.GeoDataFrame) -> pd.DataFra
     # Natural Earth uses '-99' when iso_a2 is unknown: fall back to adm0_a3 (STG-0 schema)
     out["country_iso"] = out["iso_a2"].where(out["iso_a2"] != "-99", out["adm0_a3"])
     return out.drop(columns=["adm1_code", "iso_a2", "adm0_a3"])
+
+# ---------------------------------------------------------------- continent + stratum
+
+def continent_of(country_iso, overrides: dict) -> str | None:
+    """Continent name from an ISO code (mappings.yaml › continents). None if unknown.
+
+    Accepts alpha-2 and the alpha-3 fallback used when Natural Earth's iso_a2 is '-99'.
+    """
+    if not isinstance(country_iso, str) or not country_iso:
+        return None
+    if country_iso in overrides:
+        return overrides[country_iso]
+    try:
+        code = country_iso
+        if len(code) == 3:
+            code = pcc.country_alpha3_to_country_alpha2(code)
+        return pcc.convert_continent_code_to_continent_name(
+            pcc.country_alpha2_to_continent_code(code))
+    except KeyError:
+        return None
+
+
+def add_continent(sites: pd.DataFrame, mappings_cfg: dict) -> pd.DataFrame:
+    overrides = (mappings_cfg.get("continents") or {}).get("overrides") or {}
+    out = sites.copy()
+    out["continent"] = [continent_of(c, overrides) for c in out["country_iso"]]
+    return out
+
+
+STRATUM_FILTER_KEYS = {"country", "continent", "exclude_country"}
+
+
+def _as_list(value) -> list:
+    return value if isinstance(value, list) else [value]
+
+
+def assign_strata(sites: pd.DataFrame, strata_cfg: dict) -> pd.Series:
+    """Stratum per site from sampling.yaml › strata (source + filter).
+
+    Strata are checked in file order and the first match wins; no match -> None.
+    An unknown filter key is a config error, so a typo can't silently match everything.
+    """
+    stratum = pd.Series([None] * len(sites), index=sites.index, dtype=object)
+    for name, spec in strata_cfg.items():
+        f = spec.get("filter") or {}
+        unknown = set(f) - STRATUM_FILTER_KEYS
+        if unknown:
+            raise ConfigError(f"sampling.yaml stratum {name!r}: unknown filter keys {sorted(unknown)}")
+        mask = (sites["source_code"] == spec["source"]) & stratum.isna()
+        if "country" in f:
+            mask &= sites["country_iso"].isin(_as_list(f["country"]))
+        if "continent" in f:
+            mask &= sites["continent"].isin(_as_list(f["continent"]))
+        if "exclude_country" in f:
+            mask &= ~sites["country_iso"].isin(_as_list(f["exclude_country"]))
+        stratum[mask] = name
+    return stratum
