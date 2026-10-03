@@ -2,8 +2,9 @@
 # OWQ CSVs start with leading comment lines before the header (ING-1 finding):
 # readers must skip them. VERIFY the prefix in a raw file (first lines of any chunk CSV).
 source_code: owq_gemstat
+data_files: "owq_gemstat_*_chunk*.csv"   # which files the column/shape checks apply to (helper files like sampled_sites.csv are skipped)
 expected_format: csv
-comment_prefix: "#"          # VERIFY against the raw file
+comment_prefix: "#"          # confirmed: 7 leading "#" lines (STG-1)
 required_columns:
   - date
   - indicator
