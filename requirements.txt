@@ -8,3 +8,5 @@ pyarrow==25.0.1
 zstandard==0.25.0
 pandas==2.3.3
 geopandas==1.2.0
+pycountry==26.2.16
+pycountry-convert==0.7.2
