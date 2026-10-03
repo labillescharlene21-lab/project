@@ -1,0 +1,85 @@
+# Staging layer schema (STG-0). Owner: DE2 (drafted by PM, review before use).
+#
+# Read by: STG-1 (sites, sampled_sites), STG-2 (observations), VAL-2 (schema checks).
+# Every staging Parquet file must have exactly these columns, in this order, with these types.
+#
+# dtype values (Arrow / pandas nullable): string, float64, int16, int32, bool, date32
+# Keys are natural strings, so reruns produce identical keys (needed for UPSERT and lineage):
+#   source_code  dataset the record came from: wqp | owq_gemstat | owq_eionet
+#                (not the extractor name: wqp_summary and wqp_results both produce source_code "wqp")
+#   site_key     "{source_code}:{source_site_id}"          e.g. wqp:USGS-01649190
+#   obs_key      "{source_code}:{source_record_id}"        e.g. wqp:3f9a2c... (see mappings.yaml)
+
+version: 1
+
+tables:
+
+  observations:
+    path: data/staging/observations/source_code={source_code}/year={year}/part-0000.parquet
+    partition_by: [source_code, year]
+    primary_key: [obs_key]
+    columns:
+      - {name: obs_key,          dtype: string,  nullable: false, description: "Unique observation key: source_code + ':' + source_record_id"}
+      - {name: source_code,      dtype: string,  nullable: false, description: "Dataset: wqp | owq_gemstat | owq_eionet"}
+      - {name: source_record_id, dtype: string,  nullable: false, description: "Stable ID within the source. WQP has no result ID column, so it is a SHA-1 hash (see mappings.yaml › record_id)"}
+      - {name: site_key,         dtype: string,  nullable: false, description: "Site key: source_code + ':' + source_site_id; must exist in sites"}
+      - {name: source_site_id,   dtype: string,  nullable: false, description: "Site ID in the source (WQP: MonitoringLocationIdentifier)"}
+      - {name: activity_id,      dtype: string,  nullable: true,  description: "Sampling event ID in the source (WQP: ActivityIdentifier); one activity has several results"}
+      - {name: activity_type,    dtype: string,  nullable: true,  description: "Sample type as reported (WQP: ActivityTypeCode), e.g. 'Sample-Routine', 'Quality Control Sample-Field Replicate'"}
+      - {name: indicator_code,   dtype: string,  nullable: false, description: "e_coli | enterococci | fecal_coliform | total_coliform (mappings.yaml › indicator_names)"}
+      - {name: sample_date,      dtype: date32,  nullable: false, description: "Date the sample was collected (local date as reported)"}
+      - {name: year,             dtype: int16,   nullable: false, description: "Year of sample_date (partition column)"}
+      - {name: value_cfu_100ml,  dtype: float64, nullable: true,  description: "Harmonized value in CFU/100 mL (MPN treated as CFU). Censored values: '<x' -> x/2, '>x' -> x"}
+      - {name: original_value,   dtype: string,  nullable: true,  description: "Value exactly as reported (text), kept for lineage"}
+      - {name: original_unit,    dtype: string,  nullable: true,  description: "Unit exactly as reported"}
+      - {name: is_censored,      dtype: bool,    nullable: false, description: "True if the value was below or above a detection/quantification limit"}
+      - {name: censor_direction, dtype: string,  nullable: true,  description: "'<' (left-censored), '>' (right-censored) or null"}
+      - {name: detection_limit,  dtype: float64, nullable: true,  description: "Reported detection/quantification limit in CFU/100 mL, if any"}
+      - {name: result_status,    dtype: string,  nullable: true,  description: "Status as reported (WQP: ResultStatusIdentifier); 'Rejected' rows are dropped"}
+      - {name: raw_batch_id,     dtype: string,  nullable: false, description: "Raw batch the row came from (lineage)"}
+      - {name: raw_file,         dtype: string,  nullable: false, description: "Raw file name within the batch, e.g. chunk_0002.csv (lineage)"}
+
+  sites:
+    path: data/staging/sites/sites.parquet
+    primary_key: [site_key]
+    columns:
+      - {name: site_key,        dtype: string,  nullable: false, description: "source_code + ':' + source_site_id"}
+      - {name: source_code,     dtype: string,  nullable: false, description: "wqp | owq_gemstat | owq_eionet"}
+      - {name: source_site_id,  dtype: string,  nullable: false, description: "Site ID in the source"}
+      - {name: site_name,       dtype: string,  nullable: true,  description: "Site name if the source provides one"}
+      - {name: water_body_type, dtype: string,  nullable: true,  description: "Type as reported (WQP: MonitoringLocationTypeName)"}
+      - {name: realm,           dtype: string,  nullable: true,  description: "freshwater | marine (sampling.yaml › water_body_realm); null if excluded/unmapped"}
+      - {name: latitude,        dtype: float64, nullable: false, description: "WGS84 decimal degrees"}
+      - {name: longitude,       dtype: float64, nullable: false, description: "WGS84 decimal degrees"}
+      - {name: country_iso,     dtype: string,  nullable: true,  description: "ISO 3166-1 alpha-2 from Natural Earth iso_a2 (fallback adm0_a3 when iso_a2 is '-99')"}
+      - {name: continent,       dtype: string,  nullable: true,  description: "From country_iso (mappings.yaml › continents)"}
+      - {name: region_code,     dtype: string,  nullable: true,  description: "Natural Earth adm1_code; null if no region within 25 km"}
+      - {name: region_match,    dtype: string,  nullable: false, description: "within | nearest | none"}
+      - {name: stratum,         dtype: string,  nullable: true,  description: "us | europe | gemstat_africa | gemstat_asia | gemstat_latin_america; null if none applies"}
+      - {name: n_samples,       dtype: int32,   nullable: false, description: "Samples of the realm's primary indicator in the period (eligibility)"}
+      - {name: n_years,         dtype: int16,   nullable: false, description: "Distinct years with at least one such sample"}
+      - {name: is_eligible,     dtype: bool,    nullable: false, description: "Meets sampling.yaml › eligibility"}
+      - {name: is_sampled,      dtype: bool,    nullable: false, description: "Selected by stratified_sample (fixed seed)"}
+
+  # Contract with ING-4 (weather): exactly these columns, one row per sampled site.
+  sampled_sites:
+    path: data/staging/sampled_sites/sampled_sites.parquet
+    primary_key: [site_key]
+    columns:
+      - {name: site_key,    dtype: string,  nullable: false, description: "As in sites"}
+      - {name: source_code, dtype: string,  nullable: false, description: "As in sites"}
+      - {name: latitude,    dtype: float64, nullable: false, description: "As in sites"}
+      - {name: longitude,   dtype: float64, nullable: false, description: "As in sites"}
+      - {name: stratum,     dtype: string,  nullable: false, description: "As in sites"}
+      - {name: realm,       dtype: string,  nullable: false, description: "As in sites"}
+
+  # Every row removed after raw is counted here by reason (VAL-3 reconciliation).
+  drop_log:
+    path: data/staging/_drop_log.parquet
+    primary_key: [stage, source_code, reason, batch_id]
+    columns:
+      - {name: stage,       dtype: string, nullable: false, description: "sites | observations"}
+      - {name: source_code, dtype: string, nullable: false, description: "wqp | owq_gemstat | owq_eionet"}
+      - {name: reason,      dtype: string, nullable: false, description: "One of mappings.yaml › drop_reasons"}
+      - {name: row_count,   dtype: int32,  nullable: false, description: "Rows dropped for this reason"}
+      - {name: batch_id,    dtype: string, nullable: false, description: "Staging batch id"}

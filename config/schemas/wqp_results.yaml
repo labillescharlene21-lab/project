@@ -1,0 +1,18 @@
+# Required raw columns for VAL-1 (raw checks). Observed in ING-3 live test (63 columns total).
+source_code: wqp_results
+expected_format: csv
+required_columns:
+  - MonitoringLocationIdentifier
+  - ActivityIdentifier
+  - ActivityTypeCode
+  - ActivityMediaName
+  - ActivityStartDate
+  - CharacteristicName
+  - ResultSampleFractionText
+  - ResultMeasureValue
+  - ResultMeasure/MeasureUnitCode
+  - ResultDetectionConditionText
+  - DetectionQuantitationLimitMeasure/MeasureValue
+  - DetectionQuantitationLimitMeasure/MeasureUnitCode
+  - ResultStatusIdentifier
+  - ProviderName

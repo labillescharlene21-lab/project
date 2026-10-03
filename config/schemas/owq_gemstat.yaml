@@ -1,0 +1,6 @@
+# Required raw columns for VAL-1 (one file per source_code, as VAL-1 looks up config/schemas/{source_code}.yaml).
+# TODO: fill from the ING-1 PR's observed column list: site id, latitude, longitude, date,
+#       indicator, value, unit, water-body type.
+source_code: owq_gemstat
+expected_format: csv
+required_columns: []

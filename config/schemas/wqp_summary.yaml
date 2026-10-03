@@ -1,0 +1,12 @@
+# Required raw columns for VAL-1. Observed in ING-2 (dataProfile=periodOfRecord).
+source_code: wqp_summary
+expected_format: csv
+required_columns:
+  - MonitoringLocationIdentifier
+  - YearSummarized
+  - CharacteristicName
+  - ActivityCount
+  - ResultCount
+  - MonitoringLocationTypeName
+  - MonitoringLocationLatitude
+  - MonitoringLocationLongitude
