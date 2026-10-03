@@ -376,8 +376,32 @@ docker compose up -d --build
 
 ## 13. Data Quality and Validation Approach
 
+Validation runs automatically at three stages of the pipeline. Every check produces a pass/fail result; **critical** failures stop the Airflow task, **warnings** are recorded but don't stop the run. Each stage writes a JSON report to `outputs/dq/dq_report_{stage}_{run_id}.json` and, when Postgres is available, inserts the results into the `dq_results` table.
 
-<!-- Include: table of every check (name, stage, what it tests, critical vs warning); what happens on failure; where results go (dq_results table, outputs/dq_report_*.json); link to docs/data_contract.md. -->
+### Raw stage (VAL-1, `src/validation/raw_checks.py`)
+
+Runs on every extractor's `manifest.json` before staging reads the data.
+
+| Check | What it tests | Severity |
+|---|---|---|
+| `manifest_status_success` | The extraction finished (`status == "success"`) | Critical |
+| `files_exist_non_empty` | Every file listed in the manifest exists and is not empty | Critical |
+| `checksum_matches` | Each file's SHA-256 still matches the manifest (nothing changed after download) | Critical |
+| `row_count_matches` | CSV data rows on disk (header and `#` comment lines excluded) equal the manifest's count | Critical |
+| `required_columns_present` | Data files contain every column in `config/schemas/{source_code}.yaml` (CSV headers; shapefile fields) | Critical |
+| `json_shape` | Open-Meteo files contain the required keys, and every daily series is as long as `daily.time` | Critical |
+
+Which files each check applies to is set by `data_files` in the source's schema file, so helper files (e.g. `sampled_sites.csv`, `grid_cells.csv`) aren't checked against the source's data columns.
+
+Run manually:
+```
+python -m src.validation.raw_checks --all
+python -m src.validation.raw_checks --manifest data/raw/<source>/<batch>/manifest.json
+```
+
+### Staging stage (VAL-2) and curated stage (VAL-3)
+
+TODO (VAL-2 / VAL-3): schema and type checks, keys, accepted values, ranges, referential integrity, raw → staging → curated reconciliation.
 
 ## 14. Expected Outputs
 
