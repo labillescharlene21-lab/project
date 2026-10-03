@@ -1,0 +1,8 @@
+# Required JSON structure for VAL-1 (json_shape check). Observed in ING-4.
+source_code: open_meteo
+expected_format: json
+required_keys:
+  - daily.time
+  - daily.precipitation_sum
+  - daily.temperature_2m_mean
+  - daily_units

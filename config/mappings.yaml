@@ -1,0 +1,90 @@
+# Value mappings used by staging (STG-0). Owner: DE2 (drafted by PM, review before use).
+# Rule: only add values that were actually observed in raw data; record where they were seen.
+
+# Source value -> indicator_code. Matching is exact (case-sensitive) after trimming spaces.
+indicator_names:
+  wqp:                                   # observed in ING-2 summary + ING-3 results (2026-09/10)
+    "Escherichia coli": e_coli
+    "Enterococcus": enterococci
+    "Enterococci": enterococci           # alternative WQP spelling (0 summary rows in ING-2 run, kept defensively)
+    "Fecal Coliform": fecal_coliform
+    "Total Coliform": total_coliform     # requested; confirm spelling once seen in ING-3 full run
+  owq_gemstat:                           # observed in ING-1 rows: "E. coli", "Enterococci"
+    "E. coli": e_coli
+    "Enterococci": enterococci
+    "Fecal coliform": fecal_coliform     # not yet seen in rows; both capitalisations until confirmed
+    "Fecal Coliform": fecal_coliform
+    "Total coliform": total_coliform
+    "Total Coliform": total_coliform
+  owq_eionet:                            # Eionet has no fecal/total coliform data 2015-2025 (ING-1)
+    "E. coli": e_coli
+    "Enterococci": enterococci
+
+# Unit -> multiplier to CFU/100 mL. Keys are normalized: lowercase, all spaces removed.
+# MPN (most probable number) is treated as equivalent to CFU, the same assumption OWQ makes.
+units:
+  "mpn/100ml": 1.0                       # observed in ING-3 (WQP, USGS-MD)
+  "cfu/100ml": 1.0                       # observed in ING-1 (OWQ "CFU/100mL", both sources)
+  # Add others ONLY after seeing them in profiling (DOC-2), e.g. "#/100ml", "cfu/ml" (x100).
+  # Unlisted units -> dropped with reason unit_unmapped and listed in the profiling report.
+
+# Detection / quantification wording -> censoring. Value prefixes are checked first.
+censoring:
+  value_prefixes:
+    "<": "<"                             # "<10" -> left-censored, value 10/2
+    ">": ">"                             # ">2419.6" -> right-censored, value 2419.6
+  wqp_detection_condition:               # ResultDetectionConditionText; confirm values in profiling
+    "Not Detected": "<"
+    "Present Below Quantification Limit": "<"
+    "Present Above Quantification Limit": ">"
+  rule: "left-censored -> limit / 2; right-censored -> limit; limit from the value text or DetectionQuantitationLimitMeasure/MeasureValue"
+
+# Rows kept or dropped by sample type and status (WQP).
+filters:
+  wqp_activity_type_exclude_contains:    # quality-control blanks are not environmental samples
+    - "Blank"
+  wqp_activity_type_keep_note: "Field replicates are kept; MART-1 combines same-day replicates with a geometric mean"
+  wqp_result_status_exclude:
+    - "Rejected"
+  wqp_media_keep:
+    - "Water"                            # ActivityMediaName
+
+# How source_record_id is built when the source has no unique result ID.
+record_id:
+  wqp:
+    method: sha1
+    fields:                              # joined with "|" in this order, empty string for nulls
+      - ActivityIdentifier
+      - CharacteristicName
+      - ResultSampleFractionText
+      - ResultMeasureValue
+      - ResultMeasure/MeasureUnitCode
+  # OWQ exports have NO site or record ID column (ING-1: date, indicator, value, unit,
+  # latitude, longitude, source, region, water_body). OWQ already averaged repeated observations,
+  # so (site, date, indicator) should be unique; duplicates are dropped as duplicate_obs_key.
+  owq_gemstat: &owq_ids
+    source_site_id: "coordinates rounded to 5 decimals: f'{round(lat,5):.5f}_{round(lon,5):.5f}'"
+    method: sha1
+    fields: [source_site_id, date, indicator]     # value excluded so a corrected value UPSERTs the same row
+  owq_eionet: *owq_ids
+
+# Continent from ISO alpha-2 (pycountry-convert), with explicit overrides if needed.
+continents:
+  method: pycountry_convert
+  overrides: {}                          # e.g. {"XK": "Europe"} for codes the library doesn't know
+
+# Allowed drop reasons (drop_log.reason). Keep this list in sync with the staging code.
+drop_reasons:
+  - site_not_sampled
+  - date_out_of_period
+  - indicator_unmapped
+  - media_not_water
+  - qc_blank
+  - result_rejected
+  - non_numeric_value
+  - unit_unmapped
+  - negative_value
+  - duplicate_obs_key
+  - water_body_excluded
+  - bad_coordinates
+  - no_stratum

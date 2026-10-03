@@ -1,0 +1,10 @@
+# Required attribute columns for VAL-1 / STG-1. Observed in ING-5 (4,596 features, EPSG:4326).
+source_code: natural_earth
+expected_format: shapefile
+expected_crs: EPSG:4326
+required_columns:
+  - adm1_code
+  - name
+  - iso_a2
+  - adm0_a3
+  - admin
