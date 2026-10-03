@@ -1,5 +1,6 @@
 # Required raw columns for VAL-1 (raw checks). Observed in ING-3 live test (63 columns total).
 source_code: wqp_results
+data_files: "chunk_*.csv"   # which files the column/shape checks apply to (helper files like sampled_sites.csv are skipped)
 expected_format: csv
 required_columns:
   - MonitoringLocationIdentifier
