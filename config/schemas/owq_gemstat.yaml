@@ -1,6 +1,16 @@
-# Required raw columns for VAL-1 (one file per source_code, as VAL-1 looks up config/schemas/{source_code}.yaml).
-# TODO: fill from the ING-1 PR's observed column list: site id, latitude, longitude, date,
-#       indicator, value, unit, water-body type.
+# Required raw columns for VAL-1. Observed in ING-1's real run (both OWQ sources share this 9-column schema).
+# OWQ CSVs start with leading comment lines before the header (ING-1 finding):
+# readers must skip them. VERIFY the prefix in a raw file (first lines of any chunk CSV).
 source_code: owq_gemstat
 expected_format: csv
-required_columns: []
+comment_prefix: "#"          # VERIFY against the raw file
+required_columns:
+  - date
+  - indicator
+  - value
+  - unit
+  - latitude
+  - longitude
+  - source
+  - region
+  - water_body

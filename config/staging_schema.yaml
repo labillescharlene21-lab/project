@@ -23,7 +23,7 @@ tables:
       - {name: source_code,      dtype: string,  nullable: false, description: "Dataset: wqp | owq_gemstat | owq_eionet"}
       - {name: source_record_id, dtype: string,  nullable: false, description: "Stable ID within the source. WQP has no result ID column, so it is a SHA-1 hash (see mappings.yaml › record_id)"}
       - {name: site_key,         dtype: string,  nullable: false, description: "Site key: source_code + ':' + source_site_id; must exist in sites"}
-      - {name: source_site_id,   dtype: string,  nullable: false, description: "Site ID in the source (WQP: MonitoringLocationIdentifier)"}
+      - {name: source_site_id,   dtype: string,  nullable: false, description: "Site ID in the source. WQP: MonitoringLocationIdentifier. OWQ has no site ID: rounded coordinates 'lat_lon' (mappings.yaml › record_id)"}
       - {name: activity_id,      dtype: string,  nullable: true,  description: "Sampling event ID in the source (WQP: ActivityIdentifier); one activity has several results"}
       - {name: activity_type,    dtype: string,  nullable: true,  description: "Sample type as reported (WQP: ActivityTypeCode), e.g. 'Sample-Routine', 'Quality Control Sample-Field Replicate'"}
       - {name: indicator_code,   dtype: string,  nullable: false, description: "e_coli | enterococci | fecal_coliform | total_coliform (mappings.yaml › indicator_names)"}
@@ -45,8 +45,9 @@ tables:
     columns:
       - {name: site_key,        dtype: string,  nullable: false, description: "source_code + ':' + source_site_id"}
       - {name: source_code,     dtype: string,  nullable: false, description: "wqp | owq_gemstat | owq_eionet"}
-      - {name: source_site_id,  dtype: string,  nullable: false, description: "Site ID in the source"}
-      - {name: site_name,       dtype: string,  nullable: true,  description: "Site name if the source provides one"}
+      - {name: source_site_id,  dtype: string,  nullable: false, description: "Site ID in the source (OWQ: rounded coordinates, see mappings.yaml)"}
+      - {name: site_name,       dtype: string,  nullable: true,  description: "Site name if the source provides one (OWQ: none)"}
+      - {name: source_region,   dtype: string,  nullable: true,  description: "Country as labelled by the source (OWQ 'region', e.g. 'Hungary'); country_iso comes from the spatial join"}
       - {name: water_body_type, dtype: string,  nullable: true,  description: "Type as reported (WQP: MonitoringLocationTypeName)"}
       - {name: realm,           dtype: string,  nullable: true,  description: "freshwater | marine (sampling.yaml › water_body_realm); null if excluded/unmapped"}
       - {name: latitude,        dtype: float64, nullable: false, description: "WGS84 decimal degrees"}
