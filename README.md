@@ -460,9 +460,11 @@ TODO (VAL-2 / VAL-3): schema and type checks, keys, accepted values, ranges, ref
 <!-- Include: table of outputs (raw, staging Parquet, curated tables, marts, priority CSV, DQ reports, format benchmark, maps) with location and description; hotspot and priority score rules with the final thresholds and weights; link to sql/queries.sql. -->
 
 ## 15. Known Limitations and Assumptions
-
-
-<!-- Include at least: OWQ data arrives pre-harmonized (MPN treated as CFU, censored values at half detection limit); sampling frequency and methods differ by country; weather is gridded reanalysis; Natural Earth admin-1 is beta and coarse for some countries; results describe sampled sites only; estuaries treated as marine; WPdx excluded; fecal/total coliform unscored. Add anything found in profiling. -->
+- **Lab upper limits:** GEMStat values cluster at 24,196 and 2,419,600 MPN/100 mL (reporting maximums, "at least this much"), so severity is understated for Latin America; exceedance/hotspots unaffected. New column `pct_at_lab_upper_limit` shows the share.
+- **Censoring only visible for WQP** (5–13%); OWQ values arrive pre-filled.
+- **~55% nulls** in `activity_id`, `activity_type`, `result_status` = OWQ rows (OWQ has no such fields).
+- **1,449 WQP rows (~11%) dropped as unmapped units**, mostly `MPN`/`CFU` without volume (STG-2 follow-up).
+- **Cross-stratum differences reflect monitoring design** (GEMStat river stations vs Eionet bathing sites vs WQP mixed networks), not only pollution.
 
 ## 16. Troubleshooting
 
