@@ -126,8 +126,9 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - warehouse-data:/var/lib/postgresql/data
-      # Every .sql file here runs once, on the first start with an empty volume
-      - ./sql:/docker-entrypoint-initdb.d:ro
+      # Only the DDL in sql/init runs, once, when the volume is first created.
+      # sql/queries.sql is for manual use and must not run at init.
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s

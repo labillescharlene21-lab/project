@@ -227,9 +227,9 @@ wq-hotspot-pipeline/
 │   └── utils/                  # config, log, http, manifest, paths
 │
 ├── sql/
-│   ├── 01_schema.sql           # DDL: tables, keys, constraints
-│   └── queries.sql             # representative queries
-│
+│   ├── init/
+│   │   └── 01_schema.sql       # DDL: tables, keys, constraints (runs on first DB start)
+│   └── queries.sql             # representative queries (run manually)
 ├── tests/                      # unit tests (e.g. sampling reproducibility)
 └── outputs/                    # DQ reports, benchmarks, priority ranking, maps
 ```
@@ -344,8 +344,7 @@ docker compose exec postgres psql -U wq_user -d water_quality -c "select 1"
 | `docker compose down` | Stops and removes the containers. **Data is kept.** |
 | `docker compose down -v` | Stops everything **and deletes all data** (both databases). Use for a clean start. |
 
-A full reset also re-runs the SQL files in `sql/` (they only run when the database is created):
-
+A full reset also re-runs `sql/init/01_schema.sql` (it only runs when the database is created):
 ```bash
 docker compose down -v && docker compose up -d
 ```
@@ -360,6 +359,58 @@ docker compose up -d --build
 <!-- Include: docker compose up -d / ps / down / down -v; list of services and ports; how to confirm everything is healthy. -->
 
 ## 10. Initializing PostgreSQL
+
+**How the schema is created**
+
+The warehouse schema is in [`sql/init/01_schema.sql`](sql/init/01_schema.sql) and implements [`docs/erd.md`](docs/erd.md). It is applied in two ways:
+
+1. **Automatically, on the first start.** `docker-compose.yml` mounts `sql/init/` into the `postgres` container's `/docker-entrypoint-initdb.d/`, so the DDL runs once, when the `warehouse-data` volume is created. Only `sql/init/` runs at startup; `sql/queries.sql` is for manual use.
+2. **Manually, at any time:**
+
+```bash
+   docker compose run --rm pipeline python -m src.load.init_db
+```
+
+   It applies the same file and prints the table list. It is **idempotent** (`CREATE TABLE IF NOT EXISTS`), so running it again changes nothing.
+
+`CREATE TABLE IF NOT EXISTS` never changes a table that already exists. **After a column is added or changed in `01_schema.sql`, reset the database** so the new schema is created (this deletes all loaded data):
+
+```bash
+docker compose down -v && docker compose up -d --wait
+```
+
+**Tables created (11)**
+
+| Table | Type | Contents |
+|---|---|---|
+| `dim_source` | dimension | Data sources (`wqp`, `owq_gemstat`, `owq_eionet`) |
+| `dim_indicator` | dimension | Fecal indicators with realm, EPA 2012 threshold and whether they are scored |
+| `dim_region` | dimension | Natural Earth admin-1 regions |
+| `dim_grid_cell` | dimension | 0.25° weather grid cells |
+| `dim_site` | dimension | Sampled monitoring sites with region, grid cell, realm and stratum |
+| `fact_observation` | fact | One harmonized fecal-indicator result (CFU/100 mL) with exceedance and antecedent weather |
+| `fact_weather_daily` | fact | Daily rainfall and mean temperature per grid cell |
+| `mart_site_hotspot` | mart | Per site and scored indicator: persistence, severity, trend, wet vs dry exceedance |
+| `mart_region_priority` | mart | Admin-1 regions ranked by the rehabilitation priority score |
+| `etl_batch_log` | log | One row per pipeline batch; facts and marts link to it via `load_batch_id` |
+| `dq_results` | log | Result of every data quality check |
+
+Keys are natural keys (e.g. `site_key`, `obs_key`) so reruns produce the same keys. Foreign keys enforce the links in the ERD, and CHECK constraints reject impossible values (e.g. `value_cfu_100ml >= 0`, `realm IN ('freshwater', 'marine')`).
+
+**Check the database with psql**
+
+```bash
+# List the tables
+docker compose exec postgres psql -U wq_user -d water_quality -c '\dt'
+
+# Columns, primary key, foreign keys and CHECK constraints of one table
+docker compose exec postgres psql -U wq_user -d water_quality -P pager=off -c '\d fact_observation'
+
+# Interactive session (type \q to quit)
+docker compose exec postgres psql -U wq_user -d water_quality
+```
+
+To connect from a SQL client on your machine instead, use host `localhost`, port `5432` (or `POSTGRES_PORT` from `.env`), database `water_quality`, user `wq_user` and the password from `.env` (default `change_me`).
 
 
 <!-- Include: how the DDL runs (automatic on first start, or manual command); list of tables created; how to connect with psql to check. -->
