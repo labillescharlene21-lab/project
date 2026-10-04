@@ -1,0 +1,23 @@
+# Descriptive metadata for dim_source and dim_indicator (CUR-1). Not used for requests.
+sources:
+  wqp:
+    source_name: Water Quality Portal
+    provider: USGS, US EPA, National Water Quality Monitoring Council
+    access_method: api
+    url: https://www.waterqualitydata.us/
+  owq_gemstat:
+    source_name: GEMStat (via Open Water Quality)
+    provider: UNEP GEMS/Water; harmonized by UNU-INWEH
+    access_method: export
+    url: https://openwaterquality.org/
+  owq_eionet:
+    source_name: Eionet bathing water (via Open Water Quality)
+    provider: European Environment Agency; harmonized by UNU-INWEH
+    access_method: export
+    url: https://openwaterquality.org/
+
+indicator_names:
+  e_coli: Escherichia coli
+  enterococci: Intestinal enterococci
+  fecal_coliform: Fecal coliform
+  total_coliform: Total coliform
