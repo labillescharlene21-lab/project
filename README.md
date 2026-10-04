@@ -452,7 +452,27 @@ python -m src.validation.raw_checks --manifest data/raw/<source>/<batch>/manifes
 
 ### Staging stage (VAL-2) and curated stage (VAL-3)
 
-TODO (VAL-2 / VAL-3): schema and type checks, keys, accepted values, ranges, referential integrity, raw → staging → curated reconciliation.
+### Staging stage (VAL-2, `src/validation/staging_checks.py`)
+
+Runs after STG-2 builds the staging Parquet, before CUR-1 reads it. Observations are read through `pyarrow.dataset` with hive partitioning, exactly as downstream steps see them.
+
+| Check | What it tests | Severity |
+|---|---|---|
+| `schema_matches` | Observations and sites have the columns and types in `config/staging_schema.yaml` (integer width may differ: partition columns read back as int32) | Critical |
+| `keys_not_null` | Columns declared `nullable: false` contain no nulls | Critical |
+| `obs_key_unique` | No observation key appears twice, across all partitions | Critical |
+| `accepted_values` | `indicator_code`, `source_code`, `censor_direction` and sampled sites' `realm` only use allowed values | Critical |
+| `value_range` | No negative values; values above 1,000,000 CFU/100 mL flagged for review | Warning |
+| `date_in_period` | Every `sample_date` is within the project period, and matches its `year` partition | Critical |
+| `coordinates_valid` | Site latitude in [-90, 90], longitude in [-180, 180] | Critical |
+| `observation_site_exists` | Every observation's `site_key` exists in `sites.parquet` | Critical |
+| `stratum_coverage` | Each stratum × realm has at least `min_sites_to_keep` sampled sites (empty strata, e.g. GEMStat Asia/Africa, show here) | Warning |
+
+Run manually:
+```
+python -m src.validation.staging_checks
+```
+
 
 ## 14. Expected Outputs
 
