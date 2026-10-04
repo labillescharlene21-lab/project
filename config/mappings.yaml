@@ -23,6 +23,9 @@ indicator_names:
 # Unit -> multiplier to CFU/100 mL. Keys are normalized: lowercase, all spaces removed.
 # MPN (most probable number) is treated as equivalent to CFU, the same assumption OWQ makes.
 units:
+  "#/100ml": 1.0                         # observed in ING-3 full run 2026-10-03 (WQP: 867 results, 638 limits); count per 100 mL
+  # Seen but NOT mapped (dropped as unit_unmapped, question for PM): "mpn" (968), "cfu" (76), "count" (13): no volume given;
+  # "none" (278), "hours" (135): not a concentration.
   "mpn/100ml": 1.0                       # observed in ING-3 (WQP, USGS-MD)
   "cfu/100ml": 1.0                       # observed in ING-1 (OWQ "CFU/100mL", both sources)
   # Add others ONLY after seeing them in profiling (DOC-2), e.g. "#/100ml", "cfu/ml" (x100).
@@ -37,8 +40,12 @@ censoring:
     "Not Detected": "<"
     "Present Below Quantification Limit": "<"
     "Present Above Quantification Limit": ">"
+    "Below Detection Limit": "<"           # observed in ING-3 2026-10-03 (9 rows)
+    "Not Detected at Reporting Limit": "<" # observed in ING-3 2026-10-03 (6 rows)
+    # Seen but not mapped (no usable value -> non_numeric_value): "Not Reported" (19), "Detected Not Quantified" (1)
+  non_detect_values:                     # value texts meaning "not detected"; limit from DetectionQuantitationLimit
+    - "*Non-detect"                      # observed in ING-3 2026-10-03 (160 rows)
   rule: "left-censored -> limit / 2; right-censored -> limit; limit from the value text or DetectionQuantitationLimitMeasure/MeasureValue"
-
 # Rows kept or dropped by sample type and status (WQP).
 filters:
   wqp_activity_type_exclude_contains:    # quality-control blanks are not environmental samples

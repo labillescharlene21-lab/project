@@ -120,7 +120,7 @@ def build_owq_sites(rows: pd.DataFrame, source_code: str, sampling_cfg: dict,
     """One row per OWQ site with realm, n_samples, n_years and is_eligible.
 
     Returns (sites, drops). drops counts sites removed per reason, except
-    missing_coordinates, which counts raw rows (they cannot form a site).
+    bad_coordinates, which counts raw rows (they cannot form a site).
     """
     drops: Counter = Counter()
     df = rows.copy()
@@ -129,7 +129,7 @@ def build_owq_sites(rows: pd.DataFrame, source_code: str, sampling_cfg: dict,
     df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
     df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
     coords_ok = df["latitude"].between(-90, 90) & df["longitude"].between(-180, 180)
-    drops["missing_coordinates"] += int((~coords_ok).sum())
+    drops["bad_coordinates"] += int((~coords_ok).sum())
     df = df[coords_ok].copy()
 
     # 2. Site id from rounded coordinates
@@ -351,9 +351,12 @@ def _write_parquet(df: pd.DataFrame, path: Path) -> None:
     tmp.replace(path)
 
 
-def write_drop_log(drops: dict[str, Counter], batch_id: str) -> Path:
-    """Replace this stage's rows in the shared drop log; keep other stages (STG-2)."""
-    rows = [{"stage": "sites", "source_code": src, "reason": reason,
+def write_drop_log(drops: dict[str, Counter], batch_id: str, stage: str = "sites") -> Path:
+    """Replace this stage's rows in the shared drop log; keep other stages' rows.
+
+    STG-1 writes stage="sites", STG-2 writes stage="observations".
+    """
+    rows = [{"stage": stage, "source_code": src, "reason": reason,
              "row_count": n, "batch_id": batch_id}
             for src, counts in sorted(drops.items())
             for reason, n in sorted(counts.items()) if n]
@@ -361,7 +364,7 @@ def write_drop_log(drops: dict[str, Counter], batch_id: str) -> Path:
     path = paths.staging_dir() / "_drop_log.parquet"
     if path.exists():
         old = pd.read_parquet(path)
-        new = pd.concat([old[old["stage"] != "sites"], new], ignore_index=True)
+        new = pd.concat([old[old["stage"] != stage], new], ignore_index=True)
     _write_parquet(new.astype(DROP_LOG_DTYPES), path)
     return path
 
