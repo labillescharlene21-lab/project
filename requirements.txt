@@ -10,3 +10,5 @@ pandas==2.3.3
 geopandas==1.2.0
 pycountry==26.2.16
 pycountry-convert==0.7.2
+SQLAlchemy==2.0.52
+psycopg2-binary==2.9.13
