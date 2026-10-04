@@ -227,9 +227,9 @@ wq-hotspot-pipeline/
 │   └── utils/                  # config, log, http, manifest, paths
 │
 ├── sql/
-│   ├── 01_schema.sql           # DDL: tables, keys, constraints
-│   └── queries.sql             # representative queries
-│
+│   ├── init/
+│   │   └── 01_schema.sql       # DDL: tables, keys, constraints (runs on first DB start)
+│   └── queries.sql             # representative queries (run manually)
 ├── tests/                      # unit tests (e.g. sampling reproducibility)
 └── outputs/                    # DQ reports, benchmarks, priority ranking, maps
 ```
@@ -344,8 +344,7 @@ docker compose exec postgres psql -U wq_user -d water_quality -c "select 1"
 | `docker compose down` | Stops and removes the containers. **Data is kept.** |
 | `docker compose down -v` | Stops everything **and deletes all data** (both databases). Use for a clean start. |
 
-A full reset also re-runs the SQL files in `sql/` (they only run when the database is created):
-
+A full reset also re-runs `sql/init/01_schema.sql` (it only runs when the database is created):
 ```bash
 docker compose down -v && docker compose up -d
 ```
