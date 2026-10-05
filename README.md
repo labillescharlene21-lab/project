@@ -93,9 +93,9 @@ Full problem statement: [`docs/problem_statement.md`](docs/problem_statement.md)
 
 | Name | Role | Responsibilities |
 |---|---|---|
-| TODO | Project Manager | Problem definition, source inventory, profiling, diagrams, data dictionary and contract, report, slides, analytics |
-| TODO | Data Engineer 1: Ingestion & Platform | Extractors, WQP site sampling, ingestion metadata, Docker environment, Airflow DAG |
-| TODO | Data Engineer 2: Transform & Storage | Staging and curated layers, validation, PostgreSQL model and loads, partitioning, format benchmark |
+| Labilles | Project Manager | Problem definition, Validation, source inventory, profiling, diagrams, data dictionary and contract, report, slides, analytics |
+| Cuyo | Data Engineer 1: Ingestion & Platform | Extractors, WQP site sampling, ingestion metadata, Docker environment, Airflow DAG |
+| Vicente | Data Engineer 2: Transform & Storage | Staging and curated layers, PostgreSQL model and loads, partitioning, format benchmark |
 
 ## 4. Data Source Inventory
 
