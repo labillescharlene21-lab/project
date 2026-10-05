@@ -1,0 +1,147 @@
+/* Water Hotspots brand guidelines applied to the project site.
+   Usage target: 40% Dark Slate Green, 30% Apricot Peach, 20% White Smoke / White, 10% Dark Cyan.
+   Chillout is the brand heading face; Federo is its closest free match. Lato for body, tables, captions. */
+:root {
+  --slate: #193C40;          /* Dark Slate Green (primary) */
+  --peach: #FCC4C5;          /* Apricot Peach (primary) */
+  --smoke: #F3F3F3;          /* White Smoke (secondary) */
+  --white: #FFFFFF;          /* White (secondary) */
+  --indian-red: #C1686A;     /* Indian Red (additional) */
+  --sunset: #F95454;         /* Sunset Orange (additional). Hex estimated in the brand book: confirm before release */
+  --cyan: #3A8C95;           /* Dark Cyan (additional) */
+  --tea: #E1FCC4;            /* Tea Green (additional) */
+  --heading: "Federo", "Trebuchet MS", "Segoe UI", sans-serif;
+  --body: "Lato", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@font-face { font-family: "Federo"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../vendor/fonts/federo-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../vendor/fonts/lato-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../vendor/fonts/lato-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../vendor/fonts/lato-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../vendor/fonts/lato-latin-ext-700-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; font: 400 1.0625rem/1.6 var(--body); color: var(--slate); background: var(--white); }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 22px; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+a { color: var(--slate); text-decoration-color: var(--cyan); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--indian-red); }
+:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.hero :focus-visible, .band-slate :focus-visible, .foot :focus-visible { outline-color: var(--peach); }
+
+/* Headings: Chillout (Federo) */
+h1, h2, h3 { font-family: var(--heading); font-weight: 400; letter-spacing: 0; }
+h2 { font-size: clamp(1.6rem, 3.2vw, 2rem); line-height: 1.2; margin: 0 0 .5rem; }
+h2::after { content: ""; display: block; width: 56px; height: 3px; background: var(--cyan); margin-top: 10px; }
+.band-peach h2::after { background: var(--slate); }
+.caption { font-size: .8125rem; line-height: 1.5; opacity: .85; margin: 14px 0 0; }
+.lede { max-width: 760px; margin: 14px 0 22px; }
+em { font-style: italic; }
+
+/* Bands */
+.band { padding: 56px 0; }
+.band-peach { background: var(--peach); }
+.band-white { background: var(--white); }
+.band-smoke { background: var(--smoke); }
+.band-slate { background: var(--slate); color: var(--smoke); }
+.band-slate h2 { color: var(--peach); }
+.band-slate a { color: var(--peach); }
+
+/* Hero: logo is the wordmark, lowercase, stacked, Federo; clear space about the height of the "h" on all sides */
+.hero { background: var(--slate); color: var(--smoke); padding: clamp(40px, 7vw, 76px) 0; }
+.hero a { color: var(--peach); }
+.kicker { margin: 0 0 clamp(28px, 5vw, 56px); font-size: .85rem; font-weight: 700; letter-spacing: .02em; opacity: .85; }
+.wordmark { margin: 0; color: var(--peach); font-size: clamp(3.4rem, 12vw, 7rem); line-height: .94; }
+.wordmark span { display: block; }
+.tagline { font: 400 clamp(1.3rem, 3vw, 1.75rem)/1.3 var(--heading); margin: clamp(26px, 4vw, 44px) 0 10px; }
+.project-title { max-width: 720px; margin: 0 0 22px; opacity: .9; }
+.hero-links { margin: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-weight: 700; }
+
+/* At a glance */
+.notice { background: var(--white); border-left: 5px solid var(--indian-red); border-radius: 4px; padding: 10px 14px; margin: 16px 0 0; font-size: .95rem; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 22px; }
+.kpi { background: var(--white); border-radius: 6px; padding: 16px 18px; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: center; }
+.kpi .icon { grid-row: span 2; width: 32px; height: 32px; }
+.kpi b { font: 400 1.9rem/1.15 var(--heading); }
+.kpi span { font-size: .85rem; line-height: 1.35; }
+.icon { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Ranked regions: numerals in Dark Cyan like the brand workflow slide */
+.rank-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.rank-card { background: var(--smoke); border-radius: 6px; padding: 12px 18px; display: grid; grid-template-columns: 3rem 1fr; gap: 12px; align-items: center; }
+.rank-num { font: 400 2.2rem/1 var(--heading); color: var(--cyan); text-align: center; }
+.rank-head { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; }
+.rank-head strong { font-size: 1.05rem; }
+.rank-head span { font-size: .9rem; opacity: .8; }
+.track { background: var(--white); border-radius: 4px; height: 10px; margin: 8px 0 4px; overflow: hidden; }
+.fill { background: var(--cyan); height: 100%; }
+.rank-card .caption { margin: 0; }
+.empty { padding: 14px 0; opacity: .85; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; background: var(--white); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--smoke); white-space: nowrap; }
+th { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid var(--peach); }
+tr:last-child td { border-bottom: 0; }
+.num { text-align: right; }
+.chip { display: inline-flex; align-items: center; gap: 7px; }
+.chip::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); }      /* fresh water: Dark Cyan */
+.chip.marine::before { background: var(--slate); }                                                          /* marine: Dark Slate Green */
+
+/* Map: dark slate base, Dark Cyan waterways, severity scale */
+.map-controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; margin-bottom: 12px; }
+.select-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+select { font: inherit; padding: 6px 10px; border-radius: 4px; border: 2px solid var(--cyan); background: var(--smoke); color: var(--slate); }
+.map-count { opacity: .85; font-size: .9rem; }
+#map { height: 560px; border-radius: 6px; border: 1px solid var(--cyan); background: var(--slate); }
+.leaflet-container { font-family: var(--body); background: var(--slate); }
+.leaflet-bar a, .leaflet-bar a:hover { background-color: var(--smoke); color: var(--slate); }
+.leaflet-control-attribution { background: rgba(25, 60, 64, .85) !important; color: var(--smoke); }
+.leaflet-control-attribution a { color: var(--peach); }
+.leaflet-popup-content-wrapper { background: var(--smoke); color: var(--slate); border-radius: 6px; }
+.leaflet-popup-tip { background: var(--smoke); }
+.leaflet-popup-content { margin: 12px 14px; font-size: .9rem; line-height: 1.5; }
+.leaflet-popup-content strong { font: 400 1.05rem var(--heading); display: block; margin-bottom: 4px; }
+
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin-top: 16px; padding-top: 16px; border-top: 2px solid var(--cyan); }
+.legend label { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; align-items: start; cursor: pointer; }
+.legend input { margin: 5px 0 0; accent-color: var(--cyan); }
+.legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--slate); }
+.legend .sw.none { background: transparent; border-color: var(--smoke); }
+.legend b { font-weight: 700; }
+.legend small { grid-column: 2; font-size: .8rem; opacity: .85; line-height: 1.4; }
+
+/* Workflow cards, as in the brand workflow slide */
+.workflow { list-style: none; padding: 0; margin: 22px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.workflow li { background: var(--smoke); border-radius: 6px; padding: 18px 20px; }
+.workflow .num { display: block; font: 400 2.6rem/1 var(--heading); color: var(--cyan); margin-bottom: 6px; }
+.workflow strong { font-size: 1.05rem; }
+.workflow p { margin: 6px 0 0; font-size: .95rem; line-height: 1.55; }
+
+.notes { padding-left: 1.1rem; display: grid; gap: 10px; max-width: 820px; margin: 18px 0 0; }
+.notes li::marker { color: var(--cyan); }
+
+/* Footer */
+.foot { background: var(--slate); color: var(--smoke); border-top: 4px solid var(--cyan); padding: 34px 0 44px; }
+.foot a { color: var(--peach); }
+.foot-mark { font: 400 1.7rem/1 var(--heading); color: var(--peach); margin: 0 0 16px; }
+.foot .caption { opacity: .9; max-width: 820px; }
+
+@media (max-width: 600px) {
+  .band { padding: 40px 0; }
+  #map { height: 400px; }
+  th, td { padding: 8px 10px; }
+  .rank-card { grid-template-columns: 2.4rem 1fr; padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
