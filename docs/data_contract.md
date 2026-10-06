@@ -1,4 +1,4 @@
-# Data Cntract
+# Data Contract
 
 **Version:** 1.0 · **Related:** [`data_dictionary.md`](data_dictionary.md), [`erd.md`](erd.md), [`business_rules.md`](business_rules.md), `config/staging_schema.yaml`
  
