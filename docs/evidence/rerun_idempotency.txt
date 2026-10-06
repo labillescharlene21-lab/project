@@ -1,0 +1,23 @@
+{
+  echo "# LOAD-1 rerun idempotency: two loads of the same curated batch (curated_64feca5327e4)"
+  echo "# Warehouse emptied first. Generated $(date -u '+%Y-%m-%d %H:%M UTC')"
+  echo "# Note: weather is a 6-site dev sample (ING-4 full download pending), so fact_weather_daily is small."
+  echo
+  docker compose run --rm pipeline python -m src.load.postgres --curated-ref curated_64feca5327e4 --run-id rerun_1
+  docker compose run --rm pipeline python -m src.load.postgres --curated-ref curated_64feca5327e4 --run-id rerun_2
+  echo "# SELECT count(*) per table after both runs"
+  docker compose exec -T postgres psql -U wq_user -d water_quality -P pager=off -c "
+    SELECT 'dim_source' AS table_name, count(*) FROM dim_source
+    UNION ALL SELECT 'dim_indicator', count(*) FROM dim_indicator
+    UNION ALL SELECT 'dim_region', count(*) FROM dim_region
+    UNION ALL SELECT 'dim_grid_cell', count(*) FROM dim_grid_cell
+    UNION ALL SELECT 'dim_site', count(*) FROM dim_site
+    UNION ALL SELECT 'fact_weather_daily', count(*) FROM fact_weather_daily
+    UNION ALL SELECT 'fact_observation', count(*) FROM fact_observation
+    UNION ALL SELECT 'mart_site_hotspot', count(*) FROM mart_site_hotspot
+    UNION ALL SELECT 'mart_region_priority', count(*) FROM mart_region_priority"
+  echo "# etl_batch_log rows per run and status"
+  docker compose exec -T postgres psql -U wq_user -d water_quality -P pager=off -c "
+    SELECT dag_run_id, status, count(*) AS tables FROM etl_batch_log GROUP BY 1, 2 ORDER BY 1"
+} > docs/evidence/rerun_idempotency.txt
+cat docs/evidence/rerun_idempotency.txt
