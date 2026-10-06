@@ -1,0 +1,16 @@
+dag_id              | logical_date | task_id             | state           | start_date                       | end_date                        
+====================+==============+=====================+=================+==================================+=================================
+wq_hotspot_pipeline |              | validate_raw        | upstream_failed | 2026-10-06T20:18:44.363831+00:00 | 2026-10-06T20:18:44.363831+00:00
+wq_hotspot_pipeline |              | build_staging       | upstream_failed | 2026-10-06T20:18:45.410112+00:00 | 2026-10-06T20:18:45.410112+00:00
+wq_hotspot_pipeline |              | extract_weather     | upstream_failed | 2026-10-06T20:18:45.411391+00:00 | 2026-10-06T20:18:45.411391+00:00
+wq_hotspot_pipeline |              | build_curated       | upstream_failed | 2026-10-06T20:18:46.450975+00:00 | 2026-10-06T20:18:46.450975+00:00
+wq_hotspot_pipeline |              | validate_staging    | upstream_failed | 2026-10-06T20:18:46.452678+00:00 | 2026-10-06T20:18:46.452678+00:00
+wq_hotspot_pipeline |              | build_marts         | upstream_failed | 2026-10-06T20:18:47.471490+00:00 | 2026-10-06T20:18:47.471490+00:00
+wq_hotspot_pipeline |              | load_postgres       | upstream_failed | 2026-10-06T20:18:47.472349+00:00 | 2026-10-06T20:18:47.472349+00:00
+wq_hotspot_pipeline |              | validate_curated    | upstream_failed | 2026-10-06T20:18:47.472767+00:00 | 2026-10-06T20:18:47.472767+00:00
+wq_hotspot_pipeline |              | extract_owq         | failed          | 2026-10-06T20:18:43.309082+00:00 | 2026-10-06T20:18:43.534352+00:00
+wq_hotspot_pipeline |              | extract_boundaries  | success         | 2026-10-06T20:18:43.308959+00:00 | 2026-10-06T20:18:43.579833+00:00
+wq_hotspot_pipeline |              | sample_wqp_sites    | failed          | 2026-10-06T20:18:43.308893+00:00 | 2026-10-06T20:18:43.681336+00:00
+wq_hotspot_pipeline |              | build_sampled_sites | upstream_failed | 2026-10-06T20:18:44.361461+00:00 | 2026-10-06T20:18:44.361461+00:00
+wq_hotspot_pipeline |              | extract_wqp_results | upstream_failed | 2026-10-06T20:18:44.363063+00:00 | 2026-10-06T20:18:44.363063+00:00
+                                                                                                                                                
