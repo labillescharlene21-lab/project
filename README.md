@@ -452,11 +452,9 @@ docker compose exec postgres psql -U wq_user -d water_quality
 To connect from a SQL client on your machine instead, use host `localhost`, port `5432` (or `POSTGRES_PORT` from `.env`), database `water_quality`, user `wq_user` and the password from `.env` (default `change_me`).
 
 
-<!-- Include: how the DDL runs (automatic on first start, or manual command); list of tables created; how to connect with psql to check. -->
-
 ## 11. Running the Pipeline
-<!-- TODO (ING-6): replace the DAG id, parameter names and runtime below with the real values once the DAG is merged. -->
- 
+
+
 **Full run (Airflow).** With the services healthy (§9), the DAG runs every step in order: extract → validate raw → sites and sampling → weather → staging → validate staging → curated → marts → load → validate curated.
  
 ```bash
@@ -487,7 +485,7 @@ On Windows PowerShell, quotes inside JSON are not passed reliably to `docker`, s
 | 9 | Validate staging | `python -m src.validation.staging_checks` |
 | 10 | Build curated tables | `python -m src.transform.curated` |
 | 11 | Build marts and ranking | `python -m src.transform.marts` |
-| 12 | Load PostgreSQL | *(LOAD-1: command to add)* |
+| 12 | Load PostgreSQL | `python -m src.load.postgres` |
 | 13 | Validate curated and reconcile | `python -m src.validation.curated_checks` |
  
 **Expected runtime.** *(fill from the final run)* With all raw batches present, the transform, load and validation steps take minutes. A first **live** extraction is much longer: the Open-Meteo free tier allows about 156 grid cells per day, so the weather step may stop as `partial` and resume on the next run.
@@ -699,6 +697,4 @@ docker compose up -d --build
 ## Acknowledgements
  
 Data from the Open Water Quality project (UNU-INWEH, Colorado State University, University of Colorado Boulder), the Water Quality Portal (USGS, US EPA, NWQMC), Open-Meteo, and Natural Earth. Observations remain the property of the contributing monitoring programmes; see the attribution file bundled with each Open Water Quality export.
- 
 
-Data from the Open Water Quality project (UNU-INWEH, Colorado State University, University of Colorado Boulder), the Water Quality Portal (USGS, US EPA, NWQMC), Open-Meteo, and Natural Earth. Observations remain the property of the contributing monitoring programmes; see the attribution file bundled with each Open Water Quality export.
