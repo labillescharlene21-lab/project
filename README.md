@@ -121,7 +121,7 @@ Profiling results: [`docs/source_profiling.md`](docs/source_profiling.md)
 
 ## 5. Architecture and Technology Stack
 
-![Architecture diagram](docs/architecture.png)
+<img width="4327" height="1967" alt="image" src="https://github.com/user-attachments/assets/0c4f6625-78e9-491f-8799-45961e88c957" />
 
 ### Data flow
 
