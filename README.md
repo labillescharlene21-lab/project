@@ -288,8 +288,47 @@ On Windows (Command Prompt), use `copy .env.example .env` instead.
 
 ## 8. Configuration and Environment Variables
 
-
-<!-- Include: table of every variable in .env.example (name, example value, description); what lives in config/*.yaml vs .env; statement that no secrets are committed. -->
+Settings live in two places:
+ 
+| Where | What goes there | Committed to Git? |
+|---|---|---|
+| `.env` (copied from `.env.example`) | Machine and deployment settings: ports, passwords, user IDs, pipeline mode | **No** (`.gitignore`). Optional: every variable has a default |
+| `config/*.yaml` | Everything that decides **what** the pipeline does: endpoints, sampling, mappings, rules | Yes |
+ 
+**Environment variables (`.env.example`)**
+ 
+| Variable | Default | Description |
+|---|---|---|
+| `POSTGRES_DB` | `water_quality` | Warehouse database name, created on first start |
+| `POSTGRES_USER` | `wq_user` | Warehouse user, created on first start |
+| `POSTGRES_PASSWORD` | `change_me` | Warehouse password. Required by `src/load/db.py` (no code default); change it beyond local use |
+| `POSTGRES_PORT` | `5432` | Port on **your machine**. Change it if a local PostgreSQL already uses 5432; inside Docker it is always 5432 |
+| `POSTGRES_HOST` | `postgres` | Warehouse host name; inside Docker always `postgres` |
+| `PIPELINE_MODE` | `snapshot` | `snapshot` = run from the raw files already in `data/raw/`; `live` = allowed to call the source APIs |
+| `DATA_DIR` | `/opt/project/data` | Data folder inside the containers; all paths are built from it (`src/utils/paths.py`) |
+| `CONFIG_DIR` | `/opt/project/config` | Config folder inside the containers |
+| `AIRFLOW_UID` | `50000` | User ID the containers run as. **Linux:** set it to the output of `id -u` |
+| `AIRFLOW_ADMIN_USER` | `admin` | Airflow UI login |
+| `AIRFLOW_ADMIN_PASSWORD` | `change_me` | Airflow UI password |
+| `FERNET_KEY` | *(blank)* | Encrypts saved Airflow connections; blank = unencrypted, fine locally |
+| `AIRFLOW__API_AUTH__JWT_SECRET` | `airflow_jwt_secret` | Signs Airflow's internal API tokens |
+| `AIRFLOW__API_AUTH__JWT_ISSUER` | `airflow` | Issuer name for those tokens |
+ 
+Optional, not in `.env.example`: `OUTPUT_DIR` (default: `outputs/` next to the data folder) and `LOG_LEVEL` (default `INFO`).
+ 
+**Configuration files (`config/`)**
+ 
+| File | Contents |
+|---|---|
+| `sources.yaml` | Endpoints, request settings, retries and backoff, OWQ row cap, WQP characteristic names and site types, Open-Meteo variables and rate budgets, Natural Earth URL |
+| `sampling.yaml` | Period (2015–2025), realms with primary indicator and threshold, eligibility, K, seed, water-body → realm mapping, strata |
+| `mappings.yaml` | Indicator names, unit factors, censoring rules, row filters, record-ID rules, drop reasons |
+| `business_rules.yaml` | Hotspot and priority rules: exceedance, persistence, rainfall, trend, weights. Justified in [`docs/business_rules.md`](docs/business_rules.md) |
+| `staging_schema.yaml` | Staging tables: columns, types, nullability, keys |
+| `source_catalog.yaml` | Descriptive names for `dim_source` and `dim_indicator` |
+| `schemas/{source_code}.yaml` | Required raw columns per source, used by raw validation and profiling |
+ 
+**No secrets are committed.** `.env` is git-ignored, no code contains credentials, and none of the sources need an API key. Changing a rule value is a config change only; no code edits are needed.
 
 ## 9. Starting the Docker Services
 
@@ -416,15 +455,94 @@ To connect from a SQL client on your machine instead, use host `localhost`, port
 <!-- Include: how the DDL runs (automatic on first start, or manual command); list of tables created; how to connect with psql to check. -->
 
 ## 11. Running the Pipeline
-
-
-<!-- Include: trigger command with defaults and with parameters (start_year, end_year, k, seed); expected runtime; rerun strategy (deterministic batch IDs + UPSERT) and link to rerun evidence in docs/evidence/. -->
-
+<!-- TODO (ING-6): replace the DAG id, parameter names and runtime below with the real values once the DAG is merged. -->
+ 
+**Full run (Airflow).** With the services healthy (§9), the DAG runs every step in order: extract → validate raw → sites and sampling → weather → staging → validate staging → curated → marts → load → validate curated.
+ 
+```bash
+docker compose exec airflow-scheduler airflow dags unpause wq_hotspot_pipeline
+docker compose exec airflow-scheduler airflow dags trigger wq_hotspot_pipeline
+```
+ 
+With parameters (any not given use the values in `config/sampling.yaml`):
+ 
+```bash
+docker compose exec airflow-scheduler airflow dags trigger wq_hotspot_pipeline --conf '{"start_year": 2015, "end_year": 2025, "k": 60, "seed": 42}'
+```
+ 
+On Windows PowerShell, quotes inside JSON are not passed reliably to `docker`, so trigger with parameters from the UI instead (§12): **Trigger DAG** → edit the parameters.
+ 
+**Step by step (without Airflow).** Each step is also a module with a command-line entry point. Useful for debugging one step; run them in this order:
+ 
+| # | Step | Command (prefix each with `docker compose run --rm pipeline`) |
+|---|---|---|
+| 1 | Extract OWQ (GEMStat + Eionet) | `python -m src.extract.owq` |
+| 2 | Extract WQP summary and sample US sites | `python -m src.extract.wqp_sites` |
+| 3 | Extract WQP results for sampled sites | `python -m src.extract.wqp_results` |
+| 4 | Extract Natural Earth boundaries | `python -m src.extract.boundaries` |
+| 5 | Validate raw | `python -m src.validation.raw_checks --all` |
+| 6 | Build sites, regions, OWQ sampling | `python -m src.transform.sites` |
+| 7 | Extract weather for sampled sites | `python -m src.extract.weather` (check cost first with `--plan`) |
+| 8 | Build staging observations | `python -m src.transform.staging` |
+| 9 | Validate staging | `python -m src.validation.staging_checks` |
+| 10 | Build curated tables | `python -m src.transform.curated` |
+| 11 | Build marts and ranking | `python -m src.transform.marts` |
+| 12 | Load PostgreSQL | *(LOAD-1: command to add)* |
+| 13 | Validate curated and reconcile | `python -m src.validation.curated_checks` |
+ 
+**Expected runtime.** *(fill from the final run)* With all raw batches present, the transform, load and validation steps take minutes. A first **live** extraction is much longer: the Open-Meteo free tier allows about 156 grid cells per day, so the weather step may stop as `partial` and resume on the next run.
+ 
+**Rerun strategy.** Running twice with the same parameters gives the same result and never duplicates data:
+ 
+- **Deterministic batch IDs.** `batch_id = {source}_{sha256(params)[:12]}` with no timestamps, so the same parameters write to the same raw folder. A complete batch is detected **before** any network call and skipped; an interrupted one resumes from its last completed file.
+- **Atomic staging.** Staging is written to a temporary folder and swapped in, so no partitions from an earlier run are left behind.
+- **UPSERT on natural keys.** Loads use `INSERT … ON CONFLICT (pk) DO UPDATE`, so reloading the same rows updates them instead of adding copies.
+- **Fixed seed** (42) and sorted outputs make site sampling and rankings identical on every run.
+Evidence: `docs/evidence/` *(add the two-run row-count comparison, e.g. `rerun_row_counts.txt`)*.
+ 
 ## 12. Running and Inspecting Airflow
-
-
-<!-- Include: UI URL and where credentials come from; DAG id; task order; retries/backoff; schedule; step-by-step how to find and read a failed task's log. -->
-
+<!-- TODO (ING-6): confirm the DAG id, task ids, retries and schedule against dags/wq_hotspot_pipeline.py once merged. -->
+ 
+**Open the UI:** http://localhost:8080. Log in with `AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD` from `.env` (default `admin` / `change_me`). DAGs are paused when first created (`DAGS_ARE_PAUSED_AT_CREATION`), so unpause `wq_hotspot_pipeline` with its toggle before the first run.
+ 
+**DAG:** `wq_hotspot_pipeline` (`dags/wq_hotspot_pipeline.py`). Every task calls a function in `src/`; the DAG file contains no data logic.
+ 
+**Task order** *(planned; confirm task ids against the DAG)*
+ 
+```
+extract_owq ─┐
+extract_wqp_sites → extract_wqp_results ─┤
+extract_boundaries ─┘
+        → validate_raw → build_sites → extract_weather → build_staging → validate_staging
+        → build_curated → build_marts → load_postgres → validate_curated
+```
+ 
+Independent extracts can run in parallel; everything after `validate_raw` runs in sequence because each step reads the previous one's output.
+ 
+| Setting | Value | Why |
+|---|---|---|
+| Executor | LocalExecutor | One machine; no Redis/Celery needed |
+| Retries | *(fill)* per task, exponential backoff | Recovers from short network failures; HTTP retries also happen inside the extractors (`config/sources.yaml › http`) |
+| Schedule | None (manual trigger) | Sources update irregularly; a run is triggered when a refresh is needed |
+| Catchup | Off | No historical backfill runs |
+| Failure behaviour | A failed task stops downstream tasks | A critical data-quality failure raises an error, so bad data never reaches the next layer |
+ 
+**Find and read a failed task's log**
+ 
+1. Open http://localhost:8080 and click **wq_hotspot_pipeline**.
+2. Open the **Grid** view. Each column is a run, each row a task; a red square is a failed task.
+3. Click the red square, then the **Logs** tab. Each try has its own log.
+4. Every pipeline line is tagged `stage=… | source=… | batch=…`. Scroll to the last `ERROR` line: the exception names the source, URL or check that failed.
+5. For data-quality failures, open the report named in the log: `outputs/dq/dq_report_{stage}_{run_id}.json`, or query `dq_results` (§13).
+6. Fix the cause, then click **Clear** on the failed task to rerun it and everything after it. Completed batches are skipped, so earlier work is not redone.
+From the command line:
+ 
+```bash
+docker compose exec airflow-scheduler airflow dags list-runs wq_hotspot_pipeline
+docker compose logs airflow-scheduler --tail 100
+```
+ 
+Evidence of a successful run, a failed run and its log: `docs/evidence/` *(add screenshots)*.
 ## 13. Data Quality and Validation Approach
 
 Validation runs automatically at three stages of the pipeline. Every check produces a pass/fail result; **critical** failures stop the Airflow task, **warnings** are recorded but don't stop the run. Each stage writes a JSON report to `outputs/dq/dq_report_{stage}_{run_id}.json` and, when Postgres is available, inserts the results into the `dq_results` table.
@@ -475,9 +593,58 @@ python -m src.validation.staging_checks
 
 
 ## 14. Expected Outputs
-
-
-<!-- Include: table of outputs (raw, staging Parquet, curated tables, marts, priority CSV, DQ reports, format benchmark, maps) with location and description; hotspot and priority score rules with the final thresholds and weights; link to sql/queries.sql. -->
+| Output | Location | Description |
+|---|---|---|
+| Raw batches | `data/raw/{source_code}/batch_id={batch_id}/` | Source files exactly as received + `manifest.json` (request, checksum, row count) |
+| Sites | `data/staging/sites/sites.parquet` | Every site from every source with realm, region, stratum, eligibility, `is_sampled` |
+| Sampled sites | `data/staging/sampled_sites/sampled_sites.parquet` | The 300 sampled sites (input to the weather extract) |
+| Staging observations | `data/staging/observations/source_code=*/year=*/part-0000.parquet` | Harmonized observations, partitioned by source and year |
+| Drop log | `data/staging/_drop_log.parquet` | Every removed row, counted by reason |
+| Curated tables | `data/curated/*.parquet` and PostgreSQL | `dim_source`, `dim_indicator`, `dim_region`, `dim_grid_cell`, `dim_site`, `fact_weather_daily`, `fact_observation` |
+| Site hotspot mart | `mart_site_hotspot` (PostgreSQL + Parquet) | Per site: persistence, severity, trend, wet vs dry exceedance |
+| Regional priority mart | `mart_region_priority` (PostgreSQL + Parquet) | Admin-1 regions with component scores and ranks |
+| Priority ranking | `outputs/priority_ranking.csv` | Ranked regions only, for planners |
+| Reconciliation | `outputs/reconciliation.csv` | Per source: raw rows, drops by reason, staging rows, curated rows |
+| DQ reports | `outputs/dq/dq_report_{stage}_{run_id}.json` and `dq_results` | Every check's result |
+| Source profiling | `outputs/profiling/` | Raw-data profiles ([`docs/source_profiling.md`](docs/source_profiling.md)) |
+| Format benchmark | `outputs/benchmark/` | CSV vs JSON vs Parquet ([`docs/format_benchmark.md`](docs/format_benchmark.md)) |
+| Hotspot map | *(fill)* | Map of persistent hotspots and ranked regions |
+ 
+`outputs/` is git-ignored; committed copies of evidence are in `docs/evidence/`. Column definitions: [`docs/data_dictionary.md`](docs/data_dictionary.md).
+ 
+**Hotspot rules** (`config/business_rules.yaml`, justified in [`docs/business_rules.md`](docs/business_rules.md))
+ 
+| Rule | Value |
+|---|---|
+| Thresholds | *E. coli* > **410** CFU/100 mL (freshwater); enterococci > **130** (marine). EPA 2012 |
+| Sample-day | Same-day replicates combined by shifted geometric mean |
+| Poor year | More than **10%** of sample-days exceed; years with fewer than **5** sample-days are "insufficient" |
+| Persistent hotspot | Poor in at least **3** of the site's most recent **5** classified years |
+| Trend | Theil-Sen slope of annual exceedance rate, at least **3** years |
+| Wet sample-day | At least **10 mm** of rain in the 48 h before sampling |
+ 
+**Regional priority score**
+ 
+```
+priority_score = 0.40 × persistence + 0.30 × severity + 0.15 × trend + 0.15 × rain_sensitivity
+```
+ 
+| Component | Raw value per region | Weight |
+|---|---|---|
+| Persistence | Share of the region's sites that are persistent hotspots | 0.40 |
+| Severity | Median of sites' median value ÷ threshold | 0.30 |
+| Trend | Median site trend slope (worsening = higher) | 0.15 |
+| Rain sensitivity | Median of sites' wet ÷ dry exceedance rate | 0.15 |
+ 
+Each component is min-max scaled to 0–1 across ranked regions before weighting. Regions need at least **3** sites to be ranked (others are listed as `insufficient_sites`). Ties: more hotspots first, then region code.
+ 
+**Example queries:** [`sql/queries.sql`](sql/queries.sql) answers the key questions: top 10 priority regions, hotspots per stratum and realm, wet vs dry exceedance, hotspots per country, and a lineage trace from the top region back to its raw file.
+ 
+```bash
+docker compose exec -T postgres psql -U wq_user -d water_quality < sql/queries.sql
+```
+ 
+On Windows PowerShell: `Get-Content sql/queries.sql | docker compose exec -T postgres psql -U wq_user -d water_quality`
 
 ## 15. Known Limitations and Assumptions
 - **Lab upper limits:** GEMStat values cluster at 24,196 and 2,419,600 MPN/100 mL (reporting maximums, "at least this much"), so severity is understated for Latin America; exceedance/hotspots unaffected. New column `pct_at_lab_upper_limit` shows the share.
@@ -489,15 +656,49 @@ python -m src.validation.staging_checks
 ## 16. Troubleshooting
 
 
-<!-- Include: problems actually hit during development and their fixes, e.g. ports in use, Airflow memory, Linux file permissions (AIRFLOW_UID), API rate limits (HTTP 429), missing OWQ landing file, full reset procedure. -->
+| Problem | Cause | Fix |
+|---|---|---|
+| `docker: command not found` / cannot connect to the Docker daemon | Docker Desktop not running | Start Docker Desktop and wait until it says "running" |
+| `port is already allocated` for 5432 | A local PostgreSQL uses the port | Set `POSTGRES_PORT=5433` in `.env`, then `docker compose up -d` |
+| `port is already allocated` for 8080 | Another app uses 8080 | Stop that app (Airflow's port is fixed in `docker-compose.yml`) |
+| Services stay `(health: starting)` or restart; Airflow is very slow | Docker has too little memory | Docker Desktop → Settings → Resources → Memory ≥ 4 GB |
+| `PermissionError` writing `data/` or `outputs/` (Linux) | Containers run as a different user ID | Set `AIRFLOW_UID` in `.env` to the output of `id -u`, then `docker compose up -d` |
+| New column in `01_schema.sql` doesn't appear | `CREATE TABLE IF NOT EXISTS` never changes an existing table; init scripts only run on a new volume | `docker compose down -v && docker compose up -d` (deletes loaded data) |
+| `ConfigError: ... POSTGRES_PASSWORD` | Running a module outside Docker without the variable | Run through `docker compose run --rm pipeline ...`, or set it in `.env` |
+| `SourceRequestError ... returned status 429` | Provider rate limit | Retries with backoff are automatic (`config/sources.yaml › http`). If it persists, wait and rerun; completed files are skipped |
+| Weather manifest `status: partial` | Open-Meteo daily budget reached (expected on a first live run) | Rerun after 24 h; completed cells are skipped |
+| WQP results ignore the date range | WQP POST ignores date filters in the query string | Already handled: dates are sent in the JSON body. Keep it that way if the extractor changes |
+| `LandingFileMissingError` | `export_mode` set to landing but no OWQ file in `data/landing/owq/` | Use `export_mode: scripted` (default), or place the export file named as in `config/sources.yaml › landing_filename_pattern` |
+| `FileNotFoundError: No successful raw batch for ...` | A step ran before the step that feeds it | Run the steps in the order of §11 |
+| Pipeline image doesn't pick up new packages | Image built before `requirements.txt` changed | `docker compose up -d --build` |
+| Windows: files saved by `>` look garbled (`ÿþ...`) | Windows PowerShell writes UTF-16 | Use `| Out-File -FilePath <file> -Encoding utf8` |
+| Windows: a long pasted command is cancelled half-way | PowerShell treats multi-line pastes as several commands | Paste and run one command at a time |
+| Shell script fails with `\r: command not found` | CRLF line endings | Keep LF endings (`.gitattributes`); re-checkout the file |
+ 
+**Full reset** (deletes both databases and all containers; raw files in `data/` are kept):
+ 
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
 
 ## 17. Future Improvements
 
-
-<!-- Include: e.g. native API ingestion for Hub'Eau / DataStream / UK Open WIMS, incremental loading by date watermark, storm-event analysis, watershed-based regions (HydroBASINS). -->
-
+- **More sources through native APIs:** Hub'Eau (France), DataStream (Canada), UK Open WIMS, NMMP, LAWA (New Zealand), to fill the gaps behind the OWQ compilation and add stations outside the US and Europe.
+- **Incremental loading:** a date watermark per site, so a refresh only requests observations newer than the last load.
+- **Volume-less WQP units:** recover the ~11% of WQP rows dropped as `MPN`/`CFU` without a volume, once the reporting volume can be confirmed per organization.
+- **Watershed-based regions:** aggregate by river basin (HydroBASINS) instead of administrative regions, closer to how rehabilitation is planned.
+- **Storm-event analysis:** compare exceedance in the days after heavy rain events, not only a fixed 48 h window.
+- **Higher-resolution and local-time weather:** station data where available, and weather aligned to the local sampling day.
+- **Censored-data statistics:** survival-analysis methods for censored values instead of the half-limit substitution.
+- **Interactive dashboard:** hotspot map and ranking served from the warehouse.
+- **Scheduled refresh and alerting:** a regular schedule plus notifications when a critical check fails.
 ---
-
+ 
 ## Acknowledgements
+ 
+Data from the Open Water Quality project (UNU-INWEH, Colorado State University, University of Colorado Boulder), the Water Quality Portal (USGS, US EPA, NWQMC), Open-Meteo, and Natural Earth. Observations remain the property of the contributing monitoring programmes; see the attribution file bundled with each Open Water Quality export.
+ 
 
 Data from the Open Water Quality project (UNU-INWEH, Colorado State University, University of Colorado Boulder), the Water Quality Portal (USGS, US EPA, NWQMC), Open-Meteo, and Natural Earth. Observations remain the property of the contributing monitoring programmes; see the attribution file bundled with each Open Water Quality export.
