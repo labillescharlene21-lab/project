@@ -1,23 +1,57 @@
-{
-  echo "# LOAD-1 rerun idempotency: two loads of the same curated batch (curated_64feca5327e4)"
-  echo "# Warehouse emptied first. Generated $(date -u '+%Y-%m-%d %H:%M UTC')"
-  echo "# Note: weather is a 6-site dev sample (ING-4 full download pending), so fact_weather_daily is small."
-  echo
-  docker compose run --rm pipeline python -m src.load.postgres --curated-ref curated_64feca5327e4 --run-id rerun_1
-  docker compose run --rm pipeline python -m src.load.postgres --curated-ref curated_64feca5327e4 --run-id rerun_2
-  echo "# SELECT count(*) per table after both runs"
-  docker compose exec -T postgres psql -U wq_user -d water_quality -P pager=off -c "
-    SELECT 'dim_source' AS table_name, count(*) FROM dim_source
-    UNION ALL SELECT 'dim_indicator', count(*) FROM dim_indicator
-    UNION ALL SELECT 'dim_region', count(*) FROM dim_region
-    UNION ALL SELECT 'dim_grid_cell', count(*) FROM dim_grid_cell
-    UNION ALL SELECT 'dim_site', count(*) FROM dim_site
-    UNION ALL SELECT 'fact_weather_daily', count(*) FROM fact_weather_daily
-    UNION ALL SELECT 'fact_observation', count(*) FROM fact_observation
-    UNION ALL SELECT 'mart_site_hotspot', count(*) FROM mart_site_hotspot
-    UNION ALL SELECT 'mart_region_priority', count(*) FROM mart_region_priority"
-  echo "# etl_batch_log rows per run and status"
-  docker compose exec -T postgres psql -U wq_user -d water_quality -P pager=off -c "
-    SELECT dag_run_id, status, count(*) AS tables FROM etl_batch_log GROUP BY 1, 2 ORDER BY 1"
-} > docs/evidence/rerun_idempotency.txt
-cat docs/evidence/rerun_idempotency.txt
+# LOAD-1 rerun idempotency: two loads of curated batch curated_64feca5327e4, warehouse emptied first. Weather is a 6-site dev sample (ING-4 full download pending).
+2026-10-06 10:10:59 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_source: rows in 3, inserted 3, updated 0, deleted 0, rows in table 3
+2026-10-06 10:10:59 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_indicator: rows in 4, inserted 4, updated 0, deleted 0, rows in table 4
+2026-10-06 10:10:59 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_region: rows in 107, inserted 107, updated 0, deleted 0, rows in table 107
+2026-10-06 10:10:59 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_grid_cell: rows in 5, inserted 5, updated 0, deleted 0, rows in table 5
+2026-10-06 10:10:59 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_site: rows in 300, inserted 300, updated 0, deleted 0, rows in table 300
+2026-10-06 10:10:59 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | fact_weather_daily: rows in 20090, inserted 20090, updated 0, deleted 0, rows in table 20090
+2026-10-06 10:11:00 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | fact_observation: rows in 25108, inserted 25108, updated 0, deleted 0, rows in table 25108
+2026-10-06 10:11:00 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | mart_site_hotspot: rows in 285, inserted 285, updated 0, deleted 0, rows in table 285
+2026-10-06 10:11:00 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | mart_region_priority: rows in 97, inserted 97, updated 0, deleted 0, rows in table 97
+Load run 'rerun_1' at 2026-10-06 10:11:00 UTC, curated_ref=curated_64feca5327e4
+               table  rows_in  inserted  updated  deleted  rows_in_table
+          dim_source        3         3        0        0              3
+       dim_indicator        4         4        0        0              4
+          dim_region      107       107        0        0            107
+       dim_grid_cell        5         5        0        0              5
+            dim_site      300       300        0        0            300
+  fact_weather_daily    20090     20090        0        0          20090
+    fact_observation    25108     25108        0        0          25108
+   mart_site_hotspot      285       285        0        0            285
+mart_region_priority       97        97        0        0             97
+Total inserted: 45999, updated: 0, deleted: 0
+
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_source: rows in 3, inserted 0, updated 3, deleted 0, rows in table 3
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_indicator: rows in 4, inserted 0, updated 4, deleted 0, rows in table 4
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_region: rows in 107, inserted 0, updated 107, deleted 0, rows in table 107
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_grid_cell: rows in 5, inserted 0, updated 5, deleted 0, rows in table 5
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | dim_site: rows in 300, inserted 0, updated 300, deleted 0, rows in table 300
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | fact_weather_daily: rows in 20090, inserted 0, updated 20090, deleted 0, rows in table 20090
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | fact_observation: rows in 25108, inserted 0, updated 25108, deleted 0, rows in table 25108
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | mart_site_hotspot: rows in 285, inserted 0, updated 285, deleted 0, rows in table 285
+2026-10-06 10:11:07 | INFO | stage=load | source=postgres | batch=curated_64feca5327e4 | mart_region_priority: rows in 97, inserted 0, updated 97, deleted 0, rows in table 97
+Load run 'rerun_2' at 2026-10-06 10:11:07 UTC, curated_ref=curated_64feca5327e4
+               table  rows_in  inserted  updated  deleted  rows_in_table
+          dim_source        3         0        3        0              3
+       dim_indicator        4         0        4        0              4
+          dim_region      107         0      107        0            107
+       dim_grid_cell        5         0        5        0              5
+            dim_site      300         0      300        0            300
+  fact_weather_daily    20090         0    20090        0          20090
+    fact_observation    25108         0    25108        0          25108
+   mart_site_hotspot      285         0      285        0            285
+mart_region_priority       97         0       97        0             97
+Total inserted: 0, updated: 45999, deleted: 0
+
+ dag_run_id | status  | tables 
+------------+---------+--------
+ rerun_1    | success |      9
+ rerun_2    | success |      9
+(2 rows)
+
+ dag_run_id | status  | tables 
+------------+---------+--------
+ rerun_1    | success |      9
+ rerun_2    | success |      9
+(2 rows)
+
