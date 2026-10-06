@@ -566,8 +566,6 @@ python -m src.validation.raw_checks --all
 python -m src.validation.raw_checks --manifest data/raw/<source>/<batch>/manifest.json
 ```
 
-### Staging stage (VAL-2) and curated stage (VAL-3)
-
 ### Staging stage (VAL-2, `src/validation/staging_checks.py`)
 
 Runs after STG-2 builds the staging Parquet, before CUR-1 reads it. Observations are read through `pyarrow.dataset` with hive partitioning, exactly as downstream steps see them.
@@ -588,7 +586,30 @@ Run manually:
 ```
 python -m src.validation.staging_checks
 ```
-
+### Curated stage (VAL-3, `src/validation/curated_checks.py`)
+ 
+Runs after LOAD-1 has loaded the warehouse, **against PostgreSQL** (so the database must be up). It proves the loaded data is complete and consistent, and reconciles row counts across all three layers.
+ 
+| Check | What it tests | Severity |
+|---|---|---|
+| `tables_present` | All 11 warehouse tables exist (if not, the other checks are skipped and the failure says to run DB-1 `init_db`) | Critical |
+| `referential_integrity` | Every foreign key in the database has 0 orphan rows. Foreign keys are read from the database catalog, so new ones are covered automatically | Critical |
+| `pk_unique_in_db` | No duplicated natural-key values in any table (keys from [`docs/erd.md`](docs/erd.md)). Checked directly, so duplicates are caught even if a primary-key constraint were missing | Critical |
+| `reconciliation` | Per source: raw rows − staging drops = staging rows, and staging rows = `fact_observation` rows. Raw rows come from the raw batches STG-2 actually read; drops from `_drop_log.parquet` | Critical |
+| `weather_coverage` | At least 90% of observations have `rain_48h_mm` (reported per source) | Warning |
+| `mart_rank_consistency` | Ranked regions: `priority_rank` runs 1…n with no gaps and `rank_in_country` runs 1…n within each country; unranked (`insufficient_sites`) regions have no ranks | Critical |
+| `hotspot_share_sane` | The share of persistent hotspots is strictly between 0% and 100%; 0% or 100% suggests a rule or data problem | Warning |
+ 
+Besides the JSON report, VAL-3 writes `outputs/reconciliation.csv`: one row per source with `raw_rows`, one `dropped_{reason}` column per drop reason seen, `dropped_total`, `staging_rows`, `curated_rows`, and two flags `raw_to_staging_ok` and `staging_to_curated_ok`. It is used in the report and the live demo.
+ 
+Run manually (exit code 1 if a critical check fails):
+```
+python -m src.validation.curated_checks
+python -m src.validation.curated_checks --curated-ref <curated batch id> --run-id <run id>
+```
+ 
+On Windows with Docker, prefix with `docker compose run --rm pipeline`.
+ 
 
 ## 14. Expected Outputs
 | Output | Location | Description |
